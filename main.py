@@ -1,0 +1,603 @@
+"""
+main.py — AutoGest: Sistema de Gestión de Taller Mecánico y Concesionaria
+Universidad Ricardo Palma — Base de Datos II
+
+Arquitectura híbrida:
+  - Oracle simulado (8 tablas relacionales) → mock_data/oracle_data.py
+  - MongoDB simulado (7 colecciones) → mock_data/mongo_data.py
+
+Para ejecutar:
+  python main.py   (o:  uvicorn main:app --reload)
+
+Usuarios de prueba:
+  admin       / admin123   → acceso total
+  mecanico1   / mec2026    → mecánico
+  facturacion / fact2026   → facturación
+  readonly    / view2026   → solo lectura
+"""
+
+from fasthtml.common import *
+from auth import login, puede_acceder, registrar_accion
+from database import get_oracle_connection, get_mongo_connection
+
+# ── Importar módulos de rutas ─────────────────────────────────────────
+from routes.helpers import layout, login_layout, no_perm, badge_estado
+from routes.clientes import (
+    clientes_list, clientes_nuevo, clientes_crear,
+    clientes_editar, clientes_actualizar, clientes_eliminar,
+)
+from routes.vehiculos import (
+    vehiculos_list, vehiculos_nuevo, vehiculos_crear,
+    vehiculos_editar, vehiculos_actualizar, vehiculos_eliminar,
+)
+from routes.empleados import (
+    empleados_list, empleados_nuevo, empleados_crear,
+    empleados_editar, empleados_actualizar,
+)
+from routes.ordenes import (
+    ordenes_list, ordenes_detalle, ordenes_nueva, ordenes_crear,
+    ordenes_editar, ordenes_actualizar, ordenes_cambiar_estado,
+    ordenes_agregar_repuesto,
+)
+from routes.repuestos import (
+    repuestos_list, repuestos_nuevo, repuestos_crear,
+    repuestos_editar, repuestos_actualizar, repuestos_eliminar,
+)
+from routes.facturas import (
+    facturas_list, facturas_detalle, facturas_nueva,
+    facturas_crear, facturas_cambiar_estado,
+)
+from routes.usuarios import (
+    usuarios_list, usuarios_nuevo, usuarios_crear,
+    usuarios_editar, usuarios_actualizar, usuarios_desactivar,
+)
+from routes.catalogo_tecnico import catalogo_list
+from routes.bitacora import (
+    bitacora_list, bitacora_detalle, bitacora_nueva, bitacora_crear,
+)
+from routes.reportes import reportes_list, reportes_detalle
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# ═══════════════════════════════════════════════════════════════════════
+# Inicialización de la aplicación FastHTML
+# ═══════════════════════════════════════════════════════════════════════
+app, rt = fast_app(
+    secret_key=os.getenv("SECRET_KEY"),
+    static_path="static",
+    hdrs=(
+        Link(rel="stylesheet", href="/fontawesome/css/all.min.css"),
+        Link(rel="stylesheet", href="/styles/styles.css"),
+    ),
+    live=False,
+)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Middleware — verificar sesión en cada petición protegida
+# ═══════════════════════════════════════════════════════════════════════
+def require_login(req) -> bool:
+    """Retorna True si el usuario está logueado, False si no."""
+    return bool(req.session.get("usuario"))
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# RUTAS DE AUTENTICACIÓN
+# ═══════════════════════════════════════════════════════════════════════
+
+@rt("/")
+def get(req):
+    """Redirige al login o al dashboard según sesión."""
+    if require_login(req):
+        return RedirectResponse("/dashboard", status_code=303)
+    return RedirectResponse("/login", status_code=303)
+
+
+@rt("/login")
+def get(req):
+    """Pantalla de login."""
+    if require_login(req):
+        return RedirectResponse("/dashboard", status_code=303)
+
+    error = req.query_params.get("error", "")
+    alert = Div(f"❌ {error}", cls="alert alert-error") if error else ""
+
+    form = Form(
+        Div(
+            Span(I(cls="fa-solid fa-wrench"), cls="logo-icon"),
+            H1("AutoGest"),
+            P("Sistema de Gestión de Taller Mecánico"),
+            cls="login-logo"
+        ),
+        alert,
+        Div(
+            Div(
+                Label("Usuario", style="font-size:.78rem;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;"),
+                Input(name="username", placeholder="Ingresa tu usuario", required=True,
+                      autocomplete="username", id="username"),
+                style="display:flex;flex-direction:column;gap:.4rem;margin-bottom:1rem;"
+            ),
+            Div(
+                Label("Contraseña", style="font-size:.78rem;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;"),
+                Input(name="password", type="password", placeholder="••••••••",
+                      required=True, autocomplete="current-password", id="password"),
+                style="display:flex;flex-direction:column;gap:.4rem;margin-bottom:1.25rem;"
+            ),
+        ),
+        Button(I(cls="fa-solid fa-right-to-bracket"), " Iniciar Sesión", type="submit", cls="btn btn-primary btn-full btn-lg"),
+        Div(
+            P("Usuarios de demo:"),
+            Div(
+                Span("admin / admin123", cls="badge badge-purple"),
+                Span("mecanico1 / mec2026", cls="badge badge-blue"),
+                Span("facturacion / fact2026", cls="badge badge-orange"),
+                Span("readonly / view2026", cls="badge badge-gray"),
+                style="display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.5rem;"
+            ),
+            style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border);font-size:.75rem;color:var(--text-muted);"
+        ),
+        method="post", action="/login",
+        style="display:flex;flex-direction:column;"
+    )
+
+    return login_layout("Iniciar Sesión", Div(form, cls="login-card"))
+
+
+@rt("/login")
+def post(req, username: str, password: str):
+    """Procesa el login."""
+    usuario = login(username, password)
+    if not usuario:
+        return RedirectResponse("/login?error=Usuario+o+contraseña+incorrectos", status_code=303)
+    req.session["usuario"] = usuario
+    return RedirectResponse("/dashboard", status_code=303)
+
+
+@rt("/logout")
+def get(req):
+    """Cierra sesión."""
+    usuario = req.session.get("usuario")
+    if usuario:
+        registrar_accion(usuario, "LOGOUT", "auth")
+    req.session.clear()
+    return RedirectResponse("/login", status_code=303)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# DASHBOARD
+# ═══════════════════════════════════════════════════════════════════════
+
+@rt("/dashboard")
+def get(req):
+    if not require_login(req):
+        return RedirectResponse("/login", status_code=303)
+
+    usuario = req.session.get("usuario")
+    db = get_oracle_connection()
+    mongo = get_mongo_connection()
+
+    clientes   = db.get_all_clientes()
+    vehiculos  = db.get_all_vehiculos()
+    ordenes    = db.get_all_ordenes()
+    repuestos  = db.get_all_repuestos()
+    facturas   = db.get_all_facturas()
+    alertas    = mongo.get_alertas_activas()
+    bitacoras  = mongo.get_all_bitacoras()
+
+    pendientes  = sum(1 for o in ordenes if o["estado"] == "pendiente")
+    en_proceso  = sum(1 for o in ordenes if o["estado"] == "en_proceso")
+    completadas = sum(1 for o in ordenes if o["estado"] == "completada")
+    criticos    = sum(1 for r in repuestos if r["stock"] <= 2)
+    pendiente_cobro = sum(f["total"] for f in facturas if f["estado_pago"] == "pendiente")
+
+    stats = Div(
+        Div(Div(I(cls="fa-solid fa-users"), cls="stat-icon cyan"),    Div(Div(str(len(clientes)),  cls="stat-value"), Div("Clientes",      cls="stat-label"), cls="stat-info"), cls="stat-card"),
+        Div(Div(I(cls="fa-solid fa-car"),   cls="stat-icon blue"),    Div(Div(str(len(vehiculos)), cls="stat-value"), Div("Vehículos",     cls="stat-label"), cls="stat-info"), cls="stat-card"),
+        Div(Div(I(cls="fa-solid fa-clipboard-list"), cls="stat-icon indigo"), Div(Div(str(len(ordenes)), cls="stat-value"), Div("Órdenes", cls="stat-label"), cls="stat-info"), cls="stat-card"),
+        Div(Div(I(cls="fa-solid fa-gears"), cls="stat-icon blue"),    Div(Div(str(en_proceso),     cls="stat-value"), Div("En Proceso",    cls="stat-label"), cls="stat-info"), cls="stat-card"),
+        Div(Div(I(cls="fa-solid fa-clock"), cls="stat-icon yellow"),  Div(Div(str(pendientes),     cls="stat-value"), Div("Pendientes",    cls="stat-label"), cls="stat-info"), cls="stat-card"),
+        Div(Div(I(cls="fa-solid fa-triangle-exclamation"), cls="stat-icon red"), Div(Div(str(criticos), cls="stat-value"), Div("Stock Crítico", cls="stat-label"), cls="stat-info"), cls="stat-card"),
+        Div(Div(I(cls="fa-solid fa-file-invoice"), cls="stat-icon teal"), Div(Div(str(len(facturas)), cls="stat-value"), Div("Facturas",   cls="stat-label"), cls="stat-info"), cls="stat-card"),
+        Div(Div(I(cls="fa-solid fa-sack-dollar"), cls="stat-icon green"), Div(Div(f"S/. {pendiente_cobro:,.0f}", cls="stat-value"), Div("Por Cobrar", cls="stat-label"), cls="stat-info"), cls="stat-card"),
+        cls="stats-grid"
+    )
+
+    # Alertas del sistema (MongoDB)
+    alertas_cards = []
+    for a in alertas[:4]:
+        prioridad_cls = "badge-red" if a["prioridad"] == "alta" else "badge-yellow"
+        alertas_cards.append(
+            Div(
+                Div(
+                    Span(a["tipo"].upper().replace("_"," "), cls=f"badge {prioridad_cls}"),
+                    Span(a["fecha"][:10], cls="text-muted text-sm"),
+                    style="display:flex;align-items:center;justify-content:space-between;"
+                ),
+                P(a["descripcion"], style="margin-top:.4rem;font-size:.85rem;color:var(--text-secondary);"),
+                style="padding:.75rem;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:.5rem;"
+            )
+        )
+
+    # Últimas órdenes
+    ultimas = ordenes[-5:]
+    filas_ord = [
+        Tr(
+            Td(f"#{o['id_orden']}", cls="font-mono text-sm"),
+            Td(o.get("nombre_cliente","—")),
+            Td(Span(o.get("placa",""), cls="badge badge-gray font-mono")),
+            Td(badge_estado(o["estado"])),
+            Td(A("Ver", href=f"/ordenes/{o['id_orden']}", cls="btn btn-sm btn-secondary")),
+        )
+        for o in reversed(ultimas)
+    ]
+
+    nombre_u = usuario.get("username","")
+    rol_u    = usuario.get("rol","")
+
+    contenido = Div(
+        # Bienvenida
+        Div(
+            Div(
+                Div(
+                    H2(I(cls="fa-solid fa-hand-wave"), f" ¡Bienvenido, {nombre_u}!"),
+                    P("Sesión activa como: ", Span(rol_u.capitalize(), cls=f"badge badge-blue"), cls="text-muted text-sm mt-1"),
+                    style="flex:1;"
+                ),
+                Div(
+                    Span(I(cls="fa-solid fa-database"), " Oracle", cls="badge badge-red"),
+                    Span(I(cls="fa-solid fa-leaf"), " MongoDB", cls="badge badge-green"),
+                    cls="flex gap-1", style="align-items:center;"
+                ),
+                cls="card-header", style="display:flex;align-items:center;justify-content:space-between;"
+            ),
+            cls="card mb-2"
+        ),
+        stats,
+        # Dos columnas
+        Div(
+            Div(
+                Div(
+                    Div(H2(I(cls="fa-solid fa-clipboard-list"), " Últimas Órdenes"), Span(I(cls="fa-solid fa-database"), " Oracle", cls="db-tag oracle"), cls="card-header"),
+                    Div(
+                        Div(
+                            Table(
+                                Thead(Tr(Th("#"), Th("Cliente"), Th("Placa"), Th("Estado"), Th(""))),
+                                Tbody(*filas_ord),
+                            ),
+                            cls="table-wrap"
+                        ),
+                        cls="card-body"
+                    ),
+                    cls="card"
+                ),
+                style="flex:1.5;"
+            ),
+            Div(
+                Div(
+                    Div(H2(I(cls="fa-solid fa-bell"), " Alertas del Sistema"), Span(I(cls="fa-solid fa-leaf"), " MongoDB", cls="db-tag mongo"), cls="card-header"),
+                    Div(
+                        *alertas_cards if alertas_cards else [P("Sin alertas activas.", cls="no-data")],
+                        cls="card-body"
+                    ),
+                    cls="card"
+                ),
+                style="flex:1;"
+            ),
+            cls="flex gap-2", style="align-items:flex-start;"
+        ),
+        cls="page-body"
+    )
+    return layout(req, "Dashboard", "🏠 Dashboard", f"AutoGest — {len(ordenes)} órdenes activas", contenido)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# CLIENTES
+# ═══════════════════════════════════════════════════════════════════════
+@rt("/clientes")
+def get(req):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return clientes_list(req)
+
+@rt("/clientes/nuevo")
+def get(req):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return clientes_nuevo(req)
+
+@rt("/clientes/crear")
+def post(req, nombre: str, dni: str, telefono: str, email: str):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return clientes_crear(req, nombre, dni, telefono, email)
+
+@rt("/clientes/{id_cliente}/editar")
+def get(req, id_cliente: int):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return clientes_editar(req, id_cliente)
+
+@rt("/clientes/actualizar")
+def post(req, id_cliente: int, nombre: str, dni: str, telefono: str, email: str):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return clientes_actualizar(req, id_cliente, nombre, dni, telefono, email)
+
+@rt("/clientes/eliminar")
+def post(req, id_cliente: int):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return clientes_eliminar(req, id_cliente)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# VEHÍCULOS
+# ═══════════════════════════════════════════════════════════════════════
+@rt("/vehiculos")
+def get(req):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return vehiculos_list(req)
+
+@rt("/vehiculos/nuevo")
+def get(req):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return vehiculos_nuevo(req)
+
+@rt("/vehiculos/crear")
+def post(req, id_cliente: int, placa: str, marca: str, modelo: str, anio: int):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return vehiculos_crear(req, id_cliente, placa, marca, modelo, anio)
+
+@rt("/vehiculos/{id_vehiculo}/editar")
+def get(req, id_vehiculo: int):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return vehiculos_editar(req, id_vehiculo)
+
+@rt("/vehiculos/actualizar")
+def post(req, id_vehiculo: int, id_cliente: int, placa: str, marca: str, modelo: str, anio: int):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return vehiculos_actualizar(req, id_vehiculo, id_cliente, placa, marca, modelo, anio)
+
+@rt("/vehiculos/eliminar")
+def post(req, id_vehiculo: int):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return vehiculos_eliminar(req, id_vehiculo)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# EMPLEADOS
+# ═══════════════════════════════════════════════════════════════════════
+@rt("/empleados")
+def get(req):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return empleados_list(req)
+
+@rt("/empleados/nuevo")
+def get(req):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return empleados_nuevo(req)
+
+@rt("/empleados/crear")
+def post(req, nombre: str, cargo: str, especialidad: str):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return empleados_crear(req, nombre, cargo, especialidad)
+
+@rt("/empleados/{id_empleado}/editar")
+def get(req, id_empleado: int):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return empleados_editar(req, id_empleado)
+
+@rt("/empleados/actualizar")
+def post(req, id_empleado: int, nombre: str, cargo: str, especialidad: str):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return empleados_actualizar(req, id_empleado, nombre, cargo, especialidad)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# ÓRDENES DE TRABAJO
+# ═══════════════════════════════════════════════════════════════════════
+@rt("/ordenes")
+def get(req):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return ordenes_list(req)
+
+@rt("/ordenes/nueva")
+def get(req):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return ordenes_nueva(req)
+
+@rt("/ordenes/crear")
+def post(req, id_vehiculo: int, id_empleado: int, fecha_ingreso: str, fecha_entrega: str):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return ordenes_crear(req, id_vehiculo, id_empleado, fecha_ingreso, fecha_entrega)
+
+@rt("/ordenes/{id_orden}")
+def get(req, id_orden: int):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return ordenes_detalle(req, id_orden)
+
+@rt("/ordenes/{id_orden}/editar")
+def get(req, id_orden: int):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return ordenes_editar(req, id_orden)
+
+@rt("/ordenes/actualizar")
+def post(req, id_orden: int, id_vehiculo: int, id_empleado: int,
+         fecha_ingreso: str, fecha_entrega: str, estado: str):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return ordenes_actualizar(req, id_orden, id_vehiculo, id_empleado, fecha_ingreso, fecha_entrega, estado)
+
+@rt("/ordenes/cambiar-estado")
+def post(req, id_orden: int, estado: str):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return ordenes_cambiar_estado(req, id_orden, estado)
+
+@rt("/ordenes/agregar-repuesto")
+def post(req, id_orden: int, id_pieza: int, cantidad: int, precio_unitario: float):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return ordenes_agregar_repuesto(req, id_orden, id_pieza, cantidad, precio_unitario)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# REPUESTOS / INVENTARIO
+# ═══════════════════════════════════════════════════════════════════════
+@rt("/repuestos")
+def get(req):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return repuestos_list(req)
+
+@rt("/repuestos/nuevo")
+def get(req):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return repuestos_nuevo(req)
+
+@rt("/repuestos/crear")
+def post(req, codigo: str, nombre: str, stock: int, precio_venta: float, proveedor: str):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return repuestos_crear(req, codigo, nombre, stock, precio_venta, proveedor)
+
+@rt("/repuestos/{id_pieza}/editar")
+def get(req, id_pieza: int):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return repuestos_editar(req, id_pieza)
+
+@rt("/repuestos/actualizar")
+def post(req, id_pieza: int, codigo: str, nombre: str, stock: int, precio_venta: float, proveedor: str):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return repuestos_actualizar(req, id_pieza, codigo, nombre, stock, precio_venta, proveedor)
+
+@rt("/repuestos/eliminar")
+def post(req, id_pieza: int):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return repuestos_eliminar(req, id_pieza)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# FACTURAS
+# ═══════════════════════════════════════════════════════════════════════
+@rt("/facturas")
+def get(req):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return facturas_list(req)
+
+@rt("/facturas/nueva")
+def get(req):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return facturas_nueva(req)
+
+@rt("/facturas/crear")
+def post(req, id_orden: int, total: float, metodo_pago: str):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return facturas_crear(req, id_orden, total, metodo_pago)
+
+@rt("/facturas/{id_factura}")
+def get(req, id_factura: int):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return facturas_detalle(req, id_factura)
+
+@rt("/facturas/cambiar-estado")
+def post(req, id_factura: int, estado_pago: str):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return facturas_cambiar_estado(req, id_factura, estado_pago)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# USUARIOS (solo admin)
+# ═══════════════════════════════════════════════════════════════════════
+@rt("/usuarios")
+def get(req):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return usuarios_list(req)
+
+@rt("/usuarios/nuevo")
+def get(req):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return usuarios_nuevo(req)
+
+@rt("/usuarios/crear")
+def post(req, id_empleado: int, username: str, password: str, rol: str):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return usuarios_crear(req, id_empleado, username, password, rol)
+
+@rt("/usuarios/{id_usuario}/editar")
+def get(req, id_usuario: int):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return usuarios_editar(req, id_usuario)
+
+@rt("/usuarios/actualizar")
+def post(req, id_usuario: int, id_empleado: int, username: str,
+         password: str, rol: str, estado: str):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return usuarios_actualizar(req, id_usuario, id_empleado, username, password, rol, estado)
+
+@rt("/usuarios/desactivar")
+def post(req, id_usuario: int):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return usuarios_desactivar(req, id_usuario)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# CATÁLOGO TÉCNICO (MongoDB)
+# ═══════════════════════════════════════════════════════════════════════
+@rt("/catalogo")
+def get(req):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return catalogo_list(req)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# BITÁCORA DE DIAGNÓSTICO (MongoDB)
+# ═══════════════════════════════════════════════════════════════════════
+@rt("/bitacora")
+def get(req):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return bitacora_list(req)
+
+@rt("/bitacora/nueva")
+def get(req):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return bitacora_nueva(req)
+
+@rt("/bitacora/crear")
+def post(req, id_orden: int, mecanico: str, sintomas: str,
+         codigos_obd: str, hallazgos: str, mano_de_obra: float):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return bitacora_crear(req, id_orden, mecanico, sintomas, codigos_obd, hallazgos, mano_de_obra)
+
+@rt("/bitacora/{id_orden}")
+def get(req, id_orden: int):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return bitacora_detalle(req, id_orden)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# REPORTES COMBINADOS (Oracle + MongoDB)
+# ═══════════════════════════════════════════════════════════════════════
+@rt("/reportes")
+def get(req):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return reportes_list(req)
+
+@rt("/reportes/detalle")
+def get(req):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return reportes_detalle(req)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Punto de entrada
+# ═══════════════════════════════════════════════════════════════════════
+if __name__ == "__main__":
+    import uvicorn
+    import sys
+    # Fix Windows console encoding
+    if sys.platform == "win32":
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    print("\n" + "="*60)
+    print("  [*]  AutoGest - Sistema de Gestion de Taller Mecanico")
+    print("  [U]  Universidad Ricardo Palma - Base de Datos II")
+    print("="*60)
+    print("\n  [>]  Abre: http://localhost:5001")
+    print("\n  [i]  Usuarios de prueba:")
+    print("       admin       / admin123   -> Acceso total")
+    print("       mecanico1   / mec2026    -> Mecanico")
+    print("       facturacion / fact2026   -> Facturacion")
+    print("       readonly    / view2026   -> Solo lectura")
+    print("\n" + "="*60 + "\n")
+    uvicorn.run(app, host="0.0.0.0", port=5001, reload=False)
