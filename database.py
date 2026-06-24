@@ -10,15 +10,12 @@ el mock por conexiones reales a cx_Oracle y pymongo.
 
 import os
 import oracledb
+import pymongo
+import uuid
 from dotenv import load_dotenv
 
 load_dotenv()
 
-from mock_data.mongo_data import (
-    CATALOGO_ESPECIFICACIONES, BITACORA_DIAGNOSTICO, HISTORIAL_MANTENIMIENTO,
-    COTIZACIONES, PROVEEDORES, ALERTAS_SISTEMA, LOG_ACTIVIDAD,
-    next_mongo_id
-)
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
@@ -542,55 +539,61 @@ class OracleDB:
 
 class MongoDB:
     """
-    Simula una conexión pymongo a MongoDB.
-
-    TODO: Reemplazar __init__ con:
-        import pymongo
-        client = pymongo.MongoClient("mongodb://localhost:27017/")
-        db = client["autogest_db"]
-        self.catalogo = db["catalogo_especificaciones_tecnicas"]
-        self.bitacora = db["bitacora_diagnostico"]
-        ...etc
+    Conexión real a MongoDB usando pymongo.
     """
 
     def __init__(self):
-        self.catalogo = CATALOGO_ESPECIFICACIONES
-        self.bitacora = BITACORA_DIAGNOSTICO
-        self.historial = HISTORIAL_MANTENIMIENTO
-        self.cotizaciones = COTIZACIONES
-        self.proveedores = PROVEEDORES
-        self.alertas = ALERTAS_SISTEMA
-        self.logs = LOG_ACTIVIDAD
+        uri = os.getenv("MONGO_URI")
+        db_name = os.getenv("MONGO_DB_NAME", "AutoGest_DB")
+        self.client = pymongo.MongoClient(uri)
+        self.db = self.client[db_name]
+        
+        self.catalogo = self.db["catalogo_especificaciones_tecnicas"]
+        self.bitacora = self.db["bitacora_diagnostico"]
+        self.historial = self.db["historial_mantenimiento"]
+        self.cotizaciones = self.db["cotizaciones"]
+        self.proveedores = self.db["proveedores"]
+        self.alertas = self.db["alertas_sistema"]
+        self.logs = self.db["log_actividad"]
+
+    def _remove_id(self, docs):
+        """Elimina/convierte el campo '_id' nativo de MongoDB para mantener compatibilidad."""
+        res = []
+        for doc in docs:
+            if "_id" in doc:
+                doc["_id"] = str(doc["_id"])
+            res.append(doc)
+        return res
+
+    def _remove_id_single(self, doc):
+        if doc and "_id" in doc:
+            doc["_id"] = str(doc["_id"])
+        return doc
 
     # ── CATÁLOGO TÉCNICO ──────────────────────────────────────────────
     def get_all_catalogo(self) -> List[Dict]:
-        # TODO: return list(self.catalogo.find())
-        return list(self.catalogo)
+        return self._remove_id(list(self.catalogo.find()))
 
     def buscar_catalogo(self, marca: str = "", modelo: str = "", año: int = None) -> List[Dict]:
-        # TODO: query = {}; if marca: query["marca"] = {"$regex": marca, "$options": "i"}
-        result = self.catalogo
+        query = {}
         if marca:
-            result = [c for c in result if marca.lower() in c["marca"].lower()]
+            query["marca"] = {"$regex": marca, "$options": "i"}
         if modelo:
-            result = [c for c in result if modelo.lower() in c["modelo"].lower()]
+            query["modelo"] = {"$regex": modelo, "$options": "i"}
         if año:
-            result = [c for c in result if c.get("anio") == año]
-        return result
+            query["anio"] = año
+        return self._remove_id(list(self.catalogo.find(query)))
 
     # ── BITÁCORA DE DIAGNÓSTICO ───────────────────────────────────────
     def get_all_bitacoras(self) -> List[Dict]:
-        # TODO: return list(self.bitacora.find().sort("fecha", -1))
-        return list(self.bitacora)
+        # Ordenar si existe campo fecha (o por _id inverso)
+        return self._remove_id(list(self.bitacora.find().sort("_id", -1)))
 
     def get_bitacora_by_vehiculo(self, id_vehiculo: int) -> Optional[Dict]:
-        # TODO: return self.bitacora.find_one({"idVehiculo": id_vehiculo})
-        return next((b for b in self.bitacora if b.get("idVehiculo") == id_vehiculo), None)
+        return self._remove_id_single(self.bitacora.find_one({"idVehiculo": id_vehiculo}))
 
     def create_bitacora(self, id_vehiculo: int, id_empleado: int, codigo_especificacion: str,
                         sintomas: List[str], codigos_obd: List[str], observaciones: str) -> Dict:
-        # TODO: return self.bitacora.insert_one({...}).inserted_id
-        import uuid
         nuevo = {
             "codigoDiagnostico": str(uuid.uuid4()),
             "idVehiculo": id_vehiculo,
@@ -599,54 +602,54 @@ class MongoDB:
             "sintomas": sintomas,
             "codigo_OBD": codigos_obd,
             "fotografias_url": [],
-            "observaciones": observaciones
+            "observaciones": observaciones,
+            "fecha": datetime.now()
         }
-        self.bitacora.append(nuevo)
-        return nuevo
+        self.bitacora.insert_one(nuevo)
+        return self._remove_id_single(nuevo)
 
     # ── HISTORIAL DE MANTENIMIENTO ────────────────────────────────────
     def get_all_historial(self) -> List[Dict]:
-        return list(self.historial)
+        return self._remove_id(list(self.historial.find()))
 
     def get_historial_by_vehiculo(self, id_vehiculo: int) -> Optional[Dict]:
-        return next((h for h in self.historial if h.get("idVehiculo") == id_vehiculo), None)
+        return self._remove_id_single(self.historial.find_one({"idVehiculo": id_vehiculo}))
 
     # ── COTIZACIONES ──────────────────────────────────────────────────
     def get_all_cotizaciones(self) -> List[Dict]:
-        return list(self.cotizaciones)
+        return self._remove_id(list(self.cotizaciones.find()))
 
     def get_cotizacion(self, codigo: str) -> Optional[Dict]:
-        return next((c for c in self.cotizaciones if c.get("codigoCotizacion") == codigo), None)
+        return self._remove_id_single(self.cotizaciones.find_one({"codigoCotizacion": codigo}))
 
     # ── PROVEEDORES ───────────────────────────────────────────────────
     def get_all_proveedores(self) -> List[Dict]:
-        return list(self.proveedores)
+        return self._remove_id(list(self.proveedores.find()))
 
     def get_proveedor(self, codigo: str) -> Optional[Dict]:
-        return next((p for p in self.proveedores if p.get("codigoProveedor") == codigo), None)
+        return self._remove_id_single(self.proveedores.find_one({"codigoProveedor": codigo}))
 
     # ── LOG DE ACTIVIDAD ──────────────────────────────────────────────
     def registrar_log(self, id_empleado: int, accion: str, modulo: str, resultado: str) -> None:
-        # TODO: self.logs.insert_one({...})
         log = {
-            "_id": next_mongo_id("log"),
+            "_id": str(uuid.uuid4()),
             "id_empleado": id_empleado,
             "accion": accion,
             "modulo": modulo,
             "fecha_hora": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
             "resultado": resultado
         }
-        self.logs.append(log)
+        self.logs.insert_one(log)
 
     def get_logs(self, limit: int = 50) -> List[Dict]:
-        # TODO: return list(self.logs.find().sort("fecha_hora", -1).limit(limit))
-        return list(reversed(self.logs[-limit:]))
+        return self._remove_id(list(self.logs.find().sort("fecha_hora", -1).limit(limit)))
 
     # ── ALERTAS ───────────────────────────────────────────────────────
     def get_alertas_activas(self, destinatario: str = None) -> List[Dict]:
-        result = list(self.alertas)
-        # El nuevo mock no tiene destinatario ni estado activa, por lo que retornamos todas
-        return result
+        query = {}
+        if destinatario:
+            query["destinatario"] = destinatario
+        return self._remove_id(list(self.alertas.find(query)))
 
 
 # ═══════════════════════════════════════════════════════════════════════
