@@ -1,11 +1,11 @@
 """
-routes/empleados.py — CRUD de Empleados (Oracle simulado)
+routes/empleados.py — View puro de Empleados
+=============================================
+Solo renderiza HTML. Lógica en controllers/empleados_ctrl.py.
 """
 from fasthtml.common import *
-from database import get_oracle_connection
-from auth import puede_acceder, registrar_accion
-from .helpers import layout, no_perm
-
+from auth import puede_acceder
+from .helpers import layout
 
 ESPECIALIDADES = [
     "Mecánica General", "Motor y Transmisión", "Electricidad Automotriz",
@@ -19,20 +19,14 @@ CARGOS = [
 ]
 
 
-def empleados_list(req):
-    usuario = req.session.get("usuario")
-    if not puede_acceder(usuario, "empleados", "ver"):
-        return no_perm(req)
-
-    db = get_oracle_connection()
-    empleados = db.get_all_empleados()
-
+def render_empleados_list(req, usuario, empleados):
+    """Renderiza la lista de empleados."""
     msg = req.query_params.get("msg", "")
-    alert = ""
-    if msg == "creado":
-        alert = Div("✅ Empleado registrado.", cls="alert alert-success")
-    elif msg == "editado":
-        alert = Div("✅ Empleado actualizado.", cls="alert alert-success")
+    alert_map = {
+        "creado":  Div("✅ Empleado registrado.", cls="alert alert-success"),
+        "editado": Div("✅ Empleado actualizado.", cls="alert alert-success"),
+    }
+    alert = alert_map.get(msg, "")
 
     filas = []
     for e in empleados:
@@ -74,12 +68,13 @@ def empleados_list(req):
     return layout(req, "Empleados", "👨‍🔧 Gestión de Empleados", "Base de datos Oracle", contenido)
 
 
-def empleados_nuevo(req):
-    usuario = req.session.get("usuario")
-    if not puede_acceder(usuario, "empleados", "crear"):
-        return no_perm(req)
+def render_empleados_nuevo(req):
+    """Renderiza el formulario de nuevo empleado."""
+    error = req.query_params.get("error", "")
+    alert = Div(f"❌ {error}", cls="alert alert-error") if error else ""
 
     form = Form(
+        alert,
         Div(
             Div(Label("Nombre completo"), Input(name="nombre", placeholder="Luis Alberto Romero", required=True), cls="form-group"),
             Div(Label("Cargo"),
@@ -109,35 +104,18 @@ def empleados_nuevo(req):
     return layout(req, "Nuevo Empleado", "👤 Nuevo Empleado", "", contenido)
 
 
-def empleados_crear(req, nombre: str, cargo: str, especialidad: str):
-    usuario = req.session.get("usuario")
-    if not puede_acceder(usuario, "empleados", "crear"):
-        return no_perm(req)
-    db = get_oracle_connection()
-    db.create_empleado(nombre.strip(), cargo.strip(), especialidad.strip())
-    registrar_accion(usuario, "CREAR", "empleados")
-    return RedirectResponse("/empleados?msg=creado", status_code=303)
-
-
-def empleados_editar(req, id_empleado: int):
-    usuario = req.session.get("usuario")
-    if not puede_acceder(usuario, "empleados", "editar"):
-        return no_perm(req)
-
-    db = get_oracle_connection()
-    e = db.get_empleado(id_empleado)
-    if not e:
-        return RedirectResponse("/empleados", status_code=303)
-
+def render_empleados_editar(req, empleado):
+    """Renderiza el formulario de edición de un empleado."""
+    id_empleado = empleado["id_empleado"]
     form = Form(
         Div(
-            Div(Label("Nombre completo"), Input(name="nombre", value=e["nombre"], required=True), cls="form-group"),
+            Div(Label("Nombre completo"), Input(name="nombre", value=empleado["nombre"], required=True), cls="form-group"),
             Div(Label("Cargo"),
-                Select(*[Option(c, value=c, selected=(c == e["cargo"])) for c in CARGOS],
+                Select(*[Option(c, value=c, selected=(c == empleado["cargo"])) for c in CARGOS],
                        name="cargo", required=True),
                 cls="form-group"),
             Div(Label("Especialidad"),
-                Select(*[Option(es, value=es, selected=(es == e["especialidad"])) for es in ESPECIALIDADES],
+                Select(*[Option(es, value=es, selected=(es == empleado["especialidad"])) for es in ESPECIALIDADES],
                        name="especialidad", required=True),
                 cls="form-group"),
             cls="form-grid"
@@ -160,14 +138,4 @@ def empleados_editar(req, id_empleado: int):
         ),
         cls="page-body"
     )
-    return layout(req, "Editar Empleado", f"✏️ {e['nombre']}", "", contenido)
-
-
-def empleados_actualizar(req, id_empleado: int, nombre: str, cargo: str, especialidad: str):
-    usuario = req.session.get("usuario")
-    if not puede_acceder(usuario, "empleados", "editar"):
-        return no_perm(req)
-    db = get_oracle_connection()
-    db.update_empleado(id_empleado, nombre.strip(), cargo.strip(), especialidad.strip())
-    registrar_accion(usuario, "EDITAR", "empleados")
-    return RedirectResponse("/empleados?msg=editado", status_code=303)
+    return layout(req, "Editar Empleado", f"✏️ {empleado['nombre']}", "", contenido)

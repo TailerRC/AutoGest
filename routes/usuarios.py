@@ -1,27 +1,24 @@
 """
-routes/usuarios.py — Gestión de Usuarios (solo admin, Oracle simulado)
+routes/usuarios.py — View puro de Usuarios
+==========================================
+Solo renderiza HTML. Lógica en controllers/usuarios_ctrl.py.
 """
 from fasthtml.common import *
-from database import get_oracle_connection
-from auth import puede_acceder, registrar_accion
-from .helpers import layout, no_perm, badge_estado, badge_rol
+from auth import puede_acceder
+from .helpers import layout, badge_estado, badge_rol
+
+ROLES = ["admin", "mecanico", "facturacion", "readonly"]
 
 
-def usuarios_list(req):
-    usuario = req.session.get("usuario")
-    if not puede_acceder(usuario, "usuarios", "ver"):
-        return no_perm(req)
-
-    db = get_oracle_connection()
-    usuarios = db.get_all_usuarios()
-
+def render_usuarios_list(req, usuario, usuarios):
+    """Renderiza la lista de usuarios del sistema."""
     msg = req.query_params.get("msg", "")
-    alerts = {
-        "creado":    Div("✅ Usuario creado.", cls="alert alert-success"),
-        "editado":   Div("✅ Usuario actualizado.", cls="alert alert-success"),
+    alerts_map = {
+        "creado":      Div("✅ Usuario creado.", cls="alert alert-success"),
+        "editado":     Div("✅ Usuario actualizado.", cls="alert alert-success"),
         "desactivado": Div("⚠️ Usuario desactivado.", cls="alert alert-warning"),
     }
-    alert = alerts.get(msg, "")
+    alert = alerts_map.get(msg, "")
 
     filas = []
     for u in usuarios:
@@ -75,23 +72,21 @@ def usuarios_list(req):
     return layout(req, "Usuarios", "🔐 Gestión de Usuarios", "Solo accesible para Admin — Oracle", contenido)
 
 
-def usuarios_nuevo(req):
-    usuario = req.session.get("usuario")
-    if not puede_acceder(usuario, "usuarios", "crear"):
-        return no_perm(req)
+def render_usuarios_nuevo(req, empleados):
+    """Renderiza el formulario de nuevo usuario."""
+    error = req.query_params.get("error", "")
+    alert = Div(f"❌ {error}", cls="alert alert-error") if error else ""
 
-    db = get_oracle_connection()
-    empleados = db.get_all_empleados()
     opts_e = [Option(f"{e['nombre']} ({e['cargo']})", value=str(e["id_empleado"])) for e in empleados]
-    roles = ["admin", "mecanico", "facturacion", "readonly"]
 
     form = Form(
+        alert,
         Div(
             Div(Label("Empleado vinculado"), Select(Option("-- Seleccionar --", value=""), *opts_e, name="id_empleado", required=True), cls="form-group"),
             Div(Label("Username"), Input(name="username", placeholder="juan.perez", required=True, autocomplete="off"), cls="form-group"),
             Div(Label("Contraseña"), Input(name="password", type="password", placeholder="••••••••", required=True, autocomplete="new-password"), cls="form-group"),
             Div(Label("Rol"),
-                Select(*[Option(r.capitalize(), value=r) for r in roles], name="rol", required=True),
+                Select(*[Option(r.capitalize(), value=r) for r in ROLES], name="rol", required=True),
                 cls="form-group"),
             cls="form-grid"
         ),
@@ -114,45 +109,30 @@ def usuarios_nuevo(req):
     return layout(req, "Nuevo Usuario", "👤 Nuevo Usuario", "", contenido)
 
 
-def usuarios_crear(req, id_empleado: int, username: str, password: str, rol: str):
-    usuario = req.session.get("usuario")
-    if not puede_acceder(usuario, "usuarios", "crear"):
-        return no_perm(req)
-    db = get_oracle_connection()
-    db.create_usuario(id_empleado, username.strip(), password, rol)
-    registrar_accion(usuario, "CREAR", "usuarios")
-    return RedirectResponse("/usuarios?msg=creado", status_code=303)
+def render_usuarios_editar(req, u, empleados):
+    """Renderiza el formulario de edición de un usuario."""
+    id_usuario = u["id_usuario"]
+    error = req.query_params.get("error", "")
+    alert = Div(f"❌ {error}", cls="alert alert-error") if error else ""
 
-
-def usuarios_editar(req, id_usuario: int):
-    usuario = req.session.get("usuario")
-    if not puede_acceder(usuario, "usuarios", "editar"):
-        return no_perm(req)
-
-    db = get_oracle_connection()
-    u = db.get_usuario(id_usuario)
-    if not u:
-        return RedirectResponse("/usuarios", status_code=303)
-
-    empleados = db.get_all_empleados()
-    roles = ["admin", "mecanico", "facturacion", "readonly"]
-    opts_e = [Option(f"{e['nombre']}", value=str(e["id_empleado"]), selected=(e["id_empleado"]==u["id_empleado"])) for e in empleados]
+    opts_e = [Option(f"{e['nombre']}", value=str(e["id_empleado"]), selected=(e["id_empleado"] == u["id_empleado"])) for e in empleados]
 
     form = Form(
+        alert,
         Div(
-            Div(Label("Empleado"), Select(*opts_e, name="id_empleado", required=True), cls="form-group"),
+            Div(Label("Empleado"),  Select(*opts_e, name="id_empleado", required=True), cls="form-group"),
             Div(Label("Username"), Input(name="username", value=u["username"], required=True), cls="form-group"),
             Div(Label("Nueva contraseña (dejar vacío = no cambiar)"),
                 Input(name="password", type="password", placeholder="••••••••", autocomplete="new-password"),
                 cls="form-group"),
             Div(Label("Rol"),
-                Select(*[Option(r.capitalize(), value=r, selected=(r==u["rol"])) for r in roles],
+                Select(*[Option(r.capitalize(), value=r, selected=(r == u["rol"])) for r in ROLES],
                        name="rol", required=True),
                 cls="form-group"),
             Div(Label("Estado"),
                 Select(
-                    Option("Activo", value="activo", selected=(u["estado"]=="activo")),
-                    Option("Inactivo", value="inactivo", selected=(u["estado"]=="inactivo")),
+                    Option("Activo",   value="activo",   selected=(u["estado"] == "activo")),
+                    Option("Inactivo", value="inactivo", selected=(u["estado"] == "inactivo")),
                     name="estado", required=True
                 ),
                 cls="form-group"),
@@ -176,27 +156,3 @@ def usuarios_editar(req, id_usuario: int):
         cls="page-body"
     )
     return layout(req, "Editar Usuario", f"✏️ {u['username']}", "", contenido)
-
-
-def usuarios_actualizar(req, id_usuario: int, id_empleado: int, username: str,
-                         password: str, rol: str, estado: str):
-    usuario = req.session.get("usuario")
-    if not puede_acceder(usuario, "usuarios", "editar"):
-        return no_perm(req)
-    db = get_oracle_connection()
-    pw = password if password.strip() else None
-    db.update_usuario(id_usuario, username.strip(), rol, estado, pw)
-    registrar_accion(usuario, "EDITAR", "usuarios")
-    return RedirectResponse("/usuarios?msg=editado", status_code=303)
-
-
-def usuarios_desactivar(req, id_usuario: int):
-    usuario = req.session.get("usuario")
-    if not puede_acceder(usuario, "usuarios", "eliminar"):
-        return no_perm(req)
-    db = get_oracle_connection()
-    u = db.get_usuario(id_usuario)
-    if u:
-        db.update_usuario(id_usuario, u["username"], u["rol"], "inactivo")
-        registrar_accion(usuario, "DESACTIVAR", "usuarios")
-    return RedirectResponse("/usuarios?msg=desactivado", status_code=303)

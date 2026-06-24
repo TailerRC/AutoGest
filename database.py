@@ -387,7 +387,7 @@ class MongoDB:
         if modelo:
             result = [c for c in result if modelo.lower() in c["modelo"].lower()]
         if año:
-            result = [c for c in result if c["año"] == año]
+            result = [c for c in result if c.get("anio") == año]
         return result
 
     # ── BITÁCORA DE DIAGNÓSTICO ───────────────────────────────────────
@@ -395,30 +395,47 @@ class MongoDB:
         # TODO: return list(self.bitacora.find().sort("fecha", -1))
         return list(self.bitacora)
 
-    def get_bitacora_by_orden(self, id_orden: int) -> Optional[Dict]:
-        # TODO: return self.bitacora.find_one({"id_orden_ref": id_orden})
-        return next((b for b in self.bitacora if b["id_orden_ref"] == id_orden), None)
+    def get_bitacora_by_vehiculo(self, id_vehiculo: int) -> Optional[Dict]:
+        # TODO: return self.bitacora.find_one({"idVehiculo": id_vehiculo})
+        return next((b for b in self.bitacora if b.get("idVehiculo") == id_vehiculo), None)
 
-    def create_bitacora(self, id_orden: int, mecanico: str, sintomas: List[str],
-                        codigos_obd: List[str], hallazgos: str, mano_de_obra: float) -> Dict:
+    def create_bitacora(self, id_vehiculo: int, id_empleado: int, codigo_especificacion: str,
+                        sintomas: List[str], codigos_obd: List[str], observaciones: str) -> Dict:
         # TODO: return self.bitacora.insert_one({...}).inserted_id
+        import uuid
         nuevo = {
-            "_id": next_mongo_id("bitacora"),
-            "id_orden_ref": id_orden,
-            "fecha": datetime.now().strftime("%Y-%m-%d"),
-            "mecanico": mecanico,
+            "codigoDiagnostico": str(uuid.uuid4()),
+            "idVehiculo": id_vehiculo,
+            "idEmpleado": id_empleado,
+            "codigoEspecificacion": codigo_especificacion,
             "sintomas": sintomas,
-            "codigos_obd": codigos_obd,
-            "hallazgos": hallazgos,
-            "fotos": [],
-            "mano_de_obra": mano_de_obra
+            "codigo_OBD": codigos_obd,
+            "fotografias_url": [],
+            "observaciones": observaciones
         }
         self.bitacora.append(nuevo)
         return nuevo
 
+    # ── HISTORIAL DE MANTENIMIENTO ────────────────────────────────────
+    def get_all_historial(self) -> List[Dict]:
+        return list(self.historial)
+
+    def get_historial_by_vehiculo(self, id_vehiculo: int) -> Optional[Dict]:
+        return next((h for h in self.historial if h.get("idVehiculo") == id_vehiculo), None)
+
+    # ── COTIZACIONES ──────────────────────────────────────────────────
+    def get_all_cotizaciones(self) -> List[Dict]:
+        return list(self.cotizaciones)
+
+    def get_cotizacion(self, codigo: str) -> Optional[Dict]:
+        return next((c for c in self.cotizaciones if c.get("codigoCotizacion") == codigo), None)
+
     # ── PROVEEDORES ───────────────────────────────────────────────────
     def get_all_proveedores(self) -> List[Dict]:
         return list(self.proveedores)
+
+    def get_proveedor(self, codigo: str) -> Optional[Dict]:
+        return next((p for p in self.proveedores if p.get("codigoProveedor") == codigo), None)
 
     # ── LOG DE ACTIVIDAD ──────────────────────────────────────────────
     def registrar_log(self, id_empleado: int, accion: str, modulo: str, resultado: str) -> None:
@@ -439,9 +456,8 @@ class MongoDB:
 
     # ── ALERTAS ───────────────────────────────────────────────────────
     def get_alertas_activas(self, destinatario: str = None) -> List[Dict]:
-        result = [a for a in self.alertas if a["estado"] == "activa"]
-        if destinatario:
-            result = [a for a in result if a["destinatario"] == destinatario or a["destinatario"] == "admin"]
+        result = list(self.alertas)
+        # El nuevo mock no tiene destinatario ni estado activa, por lo que retornamos todas
         return result
 
 

@@ -16,15 +16,16 @@ from datetime import datetime
 PERMISOS = {
     "admin": {
         "modulos": ["clientes", "vehiculos", "empleados", "ordenes", "repuestos",
-                    "facturas", "usuarios", "catalogo", "bitacora", "reportes", "dashboard"],
+                    "facturas", "usuarios", "catalogo", "bitacora", "reportes", "dashboard",
+                    "historial", "cotizaciones", "proveedores"],
         "acciones": ["ver", "crear", "editar", "eliminar"]
     },
     "mecanico": {
-        "modulos": ["ordenes", "repuestos", "bitacora", "historial", "catalogo", "dashboard"],
+        "modulos": ["ordenes", "repuestos", "bitacora", "historial", "catalogo", "dashboard", "proveedores"],
         "acciones": ["ver", "crear"]
     },
     "facturacion": {
-        "modulos": ["facturas", "ordenes", "clientes", "dashboard"],
+        "modulos": ["facturas", "ordenes", "clientes", "cotizaciones", "dashboard"],
         "acciones": ["ver", "crear", "editar"]
     },
     "readonly": {
@@ -47,6 +48,9 @@ MENU_POR_ROL = {
         {"href": "/catalogo",    "icon": "fa-solid fa-book-open",        "label": "Catálogo Técnico"},
         {"href": "/bitacora",    "icon": "fa-solid fa-book",             "label": "Bitácora Diagnóstico"},
         {"href": "/reportes",    "icon": "fa-solid fa-chart-bar",        "label": "Reportes"},
+        {"href": "/historial",   "icon": "fa-solid fa-clock-rotate-left","label": "Historial Mantenimiento"},
+        {"href": "/cotizaciones","icon": "fa-solid fa-file-contract",    "label": "Cotizaciones"},
+        {"href": "/proveedores", "icon": "fa-solid fa-truck-fast",       "label": "Proveedores"},
     ],
     "mecanico": [
         {"href": "/dashboard",   "icon": "fa-solid fa-house",            "label": "Dashboard"},
@@ -54,12 +58,15 @@ MENU_POR_ROL = {
         {"href": "/repuestos",   "icon": "fa-solid fa-screwdriver-wrench","label": "Inventario Repuestos"},
         {"href": "/catalogo",    "icon": "fa-solid fa-book-open",        "label": "Catálogo Técnico"},
         {"href": "/bitacora",    "icon": "fa-solid fa-book",             "label": "Bitácora Diagnóstico"},
+        {"href": "/historial",   "icon": "fa-solid fa-clock-rotate-left","label": "Historial Mantenimiento"},
+        {"href": "/proveedores", "icon": "fa-solid fa-truck-fast",       "label": "Proveedores"},
     ],
     "facturacion": [
         {"href": "/dashboard",   "icon": "fa-solid fa-house",            "label": "Dashboard"},
         {"href": "/clientes",    "icon": "fa-solid fa-users",            "label": "Clientes"},
         {"href": "/ordenes",     "icon": "fa-solid fa-clipboard-list",   "label": "Órdenes de Trabajo"},
         {"href": "/facturas",    "icon": "fa-solid fa-file-invoice-dollar","label": "Facturas"},
+        {"href": "/cotizaciones","icon": "fa-solid fa-file-contract",    "label": "Cotizaciones"},
     ],
     "readonly": [
         {"href": "/dashboard",   "icon": "fa-solid fa-house",            "label": "Dashboard"},

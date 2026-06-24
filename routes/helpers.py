@@ -36,13 +36,17 @@ def layout(req, title: str, page_title: str, page_subtitle: str, contenido):
         )
 
     sidebar = Aside(
-        # Brand
+        # Brand — Logo
         Div(
             Div(
-                I(cls="fa-solid fa-wrench brand-icon"),
+                Img(
+                    src="/image/Logo.png",
+                    alt="AutoGest Logo",
+                    cls="sidebar-logo-img"
+                ),
                 Div(
                     H2("AutoGest"),
-                    Span("Taller & Concesionaria", style="font-size:.7rem;color:var(--text-muted);"),
+                    Span("Taller & Concesionaria"),
                     cls="brand-text"
                 ),
                 cls="sidebar-brand-inner"

@@ -1,29 +1,23 @@
 """
-routes/clientes.py — CRUD de Clientes (Oracle simulado)
+routes/clientes.py — View puro de Clientes
+==========================================
+Solo contiene funciones de render HTML.
+Toda la lógica está en controllers/clientes_ctrl.py y services/clientes_svc.py.
 """
 from fasthtml.common import *
-from database import get_oracle_connection
-from auth import puede_acceder, registrar_accion
+from auth import puede_acceder
 from .helpers import layout, no_perm, badge_estado
 
 
-def clientes_list(req):
-    usuario = req.session.get("usuario")
-    if not puede_acceder(usuario, "clientes", "ver"):
-        return no_perm(req)
-
-    db = get_oracle_connection()
-    clientes = db.get_all_clientes()
-    es_admin = usuario.get("rol") == "admin"
-
+def render_clientes_list(req, usuario, clientes):
+    """Renderiza la lista de clientes."""
     msg = req.query_params.get("msg", "")
-    alert = ""
-    if msg == "creado":
-        alert = Div("✅ Cliente creado correctamente.", cls="alert alert-success")
-    elif msg == "editado":
-        alert = Div("✅ Cliente actualizado correctamente.", cls="alert alert-success")
-    elif msg == "eliminado":
-        alert = Div("🗑️ Cliente eliminado.", cls="alert alert-warning")
+    alert_map = {
+        "creado":    Div("✅ Cliente creado correctamente.", cls="alert alert-success"),
+        "editado":   Div("✅ Cliente actualizado correctamente.", cls="alert alert-success"),
+        "eliminado": Div("🗑️ Cliente eliminado.", cls="alert alert-warning"),
+    }
+    alert = alert_map.get(msg, "")
 
     filas = []
     for c in clientes:
@@ -79,11 +73,8 @@ def clientes_list(req):
     return layout(req, "Clientes", "👥 Gestión de Clientes", "Base de datos Oracle", contenido)
 
 
-def clientes_nuevo(req):
-    usuario = req.session.get("usuario")
-    if not puede_acceder(usuario, "clientes", "crear"):
-        return no_perm(req)
-
+def render_clientes_nuevo(req):
+    """Renderiza el formulario de nuevo cliente."""
     error = req.query_params.get("error", "")
     alert = Div(f"❌ {error}", cls="alert alert-error") if error else ""
 
@@ -119,33 +110,15 @@ def clientes_nuevo(req):
     return layout(req, "Nuevo Cliente", "👤 Nuevo Cliente", "Registrar en Oracle", contenido)
 
 
-def clientes_crear(req, nombre: str, dni: str, telefono: str, email: str):
-    usuario = req.session.get("usuario")
-    if not puede_acceder(usuario, "clientes", "crear"):
-        return no_perm(req)
-    if not nombre or not dni:
-        return RedirectResponse("/clientes/nuevo?error=Nombre+y+DNI+son+obligatorios", status_code=303)
-    db = get_oracle_connection()
-    db.create_cliente(nombre.strip(), telefono.strip(), dni.strip(), email.strip())
-    registrar_accion(usuario, "CREAR", "clientes")
-    return RedirectResponse("/clientes?msg=creado", status_code=303)
-
-
-def clientes_editar(req, id_cliente: int):
-    usuario = req.session.get("usuario")
-    if not puede_acceder(usuario, "clientes", "editar"):
-        return no_perm(req)
-    db = get_oracle_connection()
-    c = db.get_cliente(id_cliente)
-    if not c:
-        return RedirectResponse("/clientes", status_code=303)
-
+def render_clientes_editar(req, cliente):
+    """Renderiza el formulario de edición de un cliente existente."""
+    id_cliente = cliente["id_cliente"]
     form = Form(
         Div(
-            Div(Label("Nombre completo"), Input(name="nombre", value=c["nombre"], required=True), cls="form-group"),
-            Div(Label("DNI"), Input(name="dni", value=c["dni"], maxlength="8", required=True), cls="form-group"),
-            Div(Label("Teléfono"), Input(name="telefono", value=c["telefono"], required=True), cls="form-group"),
-            Div(Label("Email"), Input(name="email", type="email", value=c["email"], required=True), cls="form-group"),
+            Div(Label("Nombre completo"), Input(name="nombre", value=cliente["nombre"], required=True), cls="form-group"),
+            Div(Label("DNI"), Input(name="dni", value=cliente["dni"], maxlength="8", required=True), cls="form-group"),
+            Div(Label("Teléfono"), Input(name="telefono", value=cliente["telefono"], required=True), cls="form-group"),
+            Div(Label("Email"), Input(name="email", type="email", value=cliente["email"], required=True), cls="form-group"),
             cls="form-grid"
         ),
         Input(type="hidden", name="id_cliente", value=str(id_cliente)),
@@ -167,23 +140,3 @@ def clientes_editar(req, id_cliente: int):
         cls="page-body"
     )
     return layout(req, "Editar Cliente", f"✏️ Editar Cliente #{id_cliente}", "", contenido)
-
-
-def clientes_actualizar(req, id_cliente: int, nombre: str, dni: str, telefono: str, email: str):
-    usuario = req.session.get("usuario")
-    if not puede_acceder(usuario, "clientes", "editar"):
-        return no_perm(req)
-    db = get_oracle_connection()
-    db.update_cliente(id_cliente, nombre.strip(), telefono.strip(), dni.strip(), email.strip())
-    registrar_accion(usuario, "EDITAR", "clientes")
-    return RedirectResponse("/clientes?msg=editado", status_code=303)
-
-
-def clientes_eliminar(req, id_cliente: int):
-    usuario = req.session.get("usuario")
-    if not puede_acceder(usuario, "clientes", "eliminar"):
-        return no_perm(req)
-    db = get_oracle_connection()
-    db.delete_cliente(id_cliente)
-    registrar_accion(usuario, "ELIMINAR", "clientes")
-    return RedirectResponse("/clientes?msg=eliminado", status_code=303)

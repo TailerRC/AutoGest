@@ -19,45 +19,51 @@ Usuarios de prueba:
 from fasthtml.common import *
 from auth import login, puede_acceder, registrar_accion
 from database import get_oracle_connection, get_mongo_connection
-
-# ── Importar módulos de rutas ─────────────────────────────────────────
-from routes.helpers import layout, login_layout, no_perm, badge_estado
-from routes.clientes import (
-    clientes_list, clientes_nuevo, clientes_crear,
-    clientes_editar, clientes_actualizar, clientes_eliminar,
-)
-from routes.vehiculos import (
-    vehiculos_list, vehiculos_nuevo, vehiculos_crear,
-    vehiculos_editar, vehiculos_actualizar, vehiculos_eliminar,
-)
-from routes.empleados import (
-    empleados_list, empleados_nuevo, empleados_crear,
-    empleados_editar, empleados_actualizar,
-)
-from routes.ordenes import (
-    ordenes_list, ordenes_detalle, ordenes_nueva, ordenes_crear,
-    ordenes_editar, ordenes_actualizar, ordenes_cambiar_estado,
-    ordenes_agregar_repuesto,
-)
-from routes.repuestos import (
-    repuestos_list, repuestos_nuevo, repuestos_crear,
-    repuestos_editar, repuestos_actualizar, repuestos_eliminar,
-)
-from routes.facturas import (
-    facturas_list, facturas_detalle, facturas_nueva,
-    facturas_crear, facturas_cambiar_estado,
-)
-from routes.usuarios import (
-    usuarios_list, usuarios_nuevo, usuarios_crear,
-    usuarios_editar, usuarios_actualizar, usuarios_desactivar,
-)
-from routes.catalogo_tecnico import catalogo_list
-from routes.bitacora import (
-    bitacora_list, bitacora_detalle, bitacora_nueva, bitacora_crear,
-)
-from routes.reportes import reportes_list, reportes_detalle
 import os
 from dotenv import load_dotenv
+
+# ── Importar helpers ──────────────────────────────────────────────────
+from routes.helpers import layout, login_layout, no_perm, badge_estado
+
+# ── Importar módulos de controllers ───────────────────────────────────
+from controllers.clientes_ctrl import (
+    ctrl_clientes_list, ctrl_clientes_nuevo, ctrl_clientes_crear,
+    ctrl_clientes_editar, ctrl_clientes_actualizar, ctrl_clientes_eliminar,
+)
+from controllers.vehiculos_ctrl import (
+    ctrl_vehiculos_list, ctrl_vehiculos_nuevo, ctrl_vehiculos_crear,
+    ctrl_vehiculos_editar, ctrl_vehiculos_actualizar, ctrl_vehiculos_eliminar,
+)
+from controllers.empleados_ctrl import (
+    ctrl_empleados_list, ctrl_empleados_nuevo, ctrl_empleados_crear,
+    ctrl_empleados_editar, ctrl_empleados_actualizar,
+)
+from controllers.ordenes_ctrl import (
+    ctrl_ordenes_list, ctrl_ordenes_detalle, ctrl_ordenes_nueva, ctrl_ordenes_crear,
+    ctrl_ordenes_editar, ctrl_ordenes_actualizar, ctrl_ordenes_cambiar_estado,
+    ctrl_ordenes_agregar_repuesto,
+)
+from controllers.repuestos_ctrl import (
+    ctrl_repuestos_list, ctrl_repuestos_nuevo, ctrl_repuestos_crear,
+    ctrl_repuestos_editar, ctrl_repuestos_actualizar, ctrl_repuestos_eliminar,
+)
+from controllers.facturas_ctrl import (
+    ctrl_facturas_list, ctrl_facturas_detalle, ctrl_facturas_nueva,
+    ctrl_facturas_crear, ctrl_facturas_cambiar_estado,
+)
+from controllers.usuarios_ctrl import (
+    ctrl_usuarios_list, ctrl_usuarios_nuevo, ctrl_usuarios_crear,
+    ctrl_usuarios_editar, ctrl_usuarios_actualizar, ctrl_usuarios_desactivar,
+)
+from controllers.catalogo_ctrl import ctrl_catalogo_list
+from controllers.bitacora_ctrl import (
+    ctrl_bitacora_list, ctrl_bitacora_nueva, ctrl_bitacora_crear, ctrl_bitacora_detalle
+)
+from controllers.reportes_ctrl import ctrl_reportes_list, ctrl_reportes_detalle
+
+from controllers.historial_ctrl import ctrl_historial_list
+from controllers.cotizaciones_ctrl import ctrl_cotizaciones_list
+from controllers.proveedores_ctrl import ctrl_proveedores_list
 
 load_dotenv()
 
@@ -65,7 +71,7 @@ load_dotenv()
 # Inicialización de la aplicación FastHTML
 # ═══════════════════════════════════════════════════════════════════════
 app, rt = fast_app(
-    secret_key=os.getenv("SECRET_KEY"),
+    secret_key=os.getenv("SECRET_KEY", "dev_secret_key"),
     static_path="static",
     hdrs=(
         Link(rel="stylesheet", href="/fontawesome/css/all.min.css"),
@@ -106,7 +112,10 @@ def get(req):
 
     form = Form(
         Div(
-            Span(I(cls="fa-solid fa-wrench"), cls="logo-icon"),
+            Div(
+                Img(src="/image/Logo.png", alt="AutoGest"),
+                cls="logo-img-wrap"
+            ),
             H1("AutoGest"),
             P("Sistema de Gestión de Taller Mecánico"),
             cls="login-logo"
@@ -130,10 +139,10 @@ def get(req):
         Div(
             P("Usuarios de demo:"),
             Div(
-                Span("admin / admin123", cls="badge badge-purple"),
-                Span("mecanico1 / mec2026", cls="badge badge-blue"),
-                Span("facturacion / fact2026", cls="badge badge-orange"),
-                Span("readonly / view2026", cls="badge badge-gray"),
+                Span("ana.gomez / admin123", cls="badge badge-purple"),
+                Span("pedro.ramirez / mec2026", cls="badge badge-blue"),
+                Span("luis.torres / fact2026", cls="badge badge-orange"),
+                Span("diego.vargas / view2026", cls="badge badge-gray"),
                 style="display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.5rem;"
             ),
             style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border);font-size:.75rem;color:var(--text-muted);"
@@ -207,15 +216,15 @@ def get(req):
     # Alertas del sistema (MongoDB)
     alertas_cards = []
     for a in alertas[:4]:
-        prioridad_cls = "badge-red" if a["prioridad"] == "alta" else "badge-yellow"
+        prioridad_cls = "badge-red" if "Crítico" in a.get("tipo_evento", "") or "Seguridad" in a.get("tipo_evento", "") else "badge-yellow"
         alertas_cards.append(
             Div(
                 Div(
-                    Span(a["tipo"].upper().replace("_"," "), cls=f"badge {prioridad_cls}"),
-                    Span(a["fecha"][:10], cls="text-muted text-sm"),
+                    Span(a.get("tipo_evento", "").upper(), cls=f"badge {prioridad_cls}"),
+                    Span(a.get("codigoAlerta", ""), cls="text-muted text-sm font-mono"),
                     style="display:flex;align-items:center;justify-content:space-between;"
                 ),
-                P(a["descripcion"], style="margin-top:.4rem;font-size:.85rem;color:var(--text-secondary);"),
+                P(str(a.get("detalle_notificacion", {})), style="margin-top:.4rem;font-size:.85rem;color:var(--text-secondary);"),
                 style="padding:.75rem;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:.5rem;"
             )
         )
@@ -298,32 +307,32 @@ def get(req):
 @rt("/clientes")
 def get(req):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return clientes_list(req)
+    return ctrl_clientes_list(req)
 
 @rt("/clientes/nuevo")
 def get(req):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return clientes_nuevo(req)
+    return ctrl_clientes_nuevo(req)
 
 @rt("/clientes/crear")
 def post(req, nombre: str, dni: str, telefono: str, email: str):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return clientes_crear(req, nombre, dni, telefono, email)
+    return ctrl_clientes_crear(req, nombre, dni, telefono, email)
 
 @rt("/clientes/{id_cliente}/editar")
 def get(req, id_cliente: int):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return clientes_editar(req, id_cliente)
+    return ctrl_clientes_editar(req, id_cliente)
 
 @rt("/clientes/actualizar")
 def post(req, id_cliente: int, nombre: str, dni: str, telefono: str, email: str):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return clientes_actualizar(req, id_cliente, nombre, dni, telefono, email)
+    return ctrl_clientes_actualizar(req, id_cliente, nombre, dni, telefono, email)
 
 @rt("/clientes/eliminar")
 def post(req, id_cliente: int):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return clientes_eliminar(req, id_cliente)
+    return ctrl_clientes_eliminar(req, id_cliente)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -332,32 +341,32 @@ def post(req, id_cliente: int):
 @rt("/vehiculos")
 def get(req):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return vehiculos_list(req)
+    return ctrl_vehiculos_list(req)
 
 @rt("/vehiculos/nuevo")
 def get(req):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return vehiculos_nuevo(req)
+    return ctrl_vehiculos_nuevo(req)
 
 @rt("/vehiculos/crear")
 def post(req, id_cliente: int, placa: str, marca: str, modelo: str, anio: int):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return vehiculos_crear(req, id_cliente, placa, marca, modelo, anio)
+    return ctrl_vehiculos_crear(req, id_cliente, placa, marca, modelo, anio)
 
 @rt("/vehiculos/{id_vehiculo}/editar")
 def get(req, id_vehiculo: int):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return vehiculos_editar(req, id_vehiculo)
+    return ctrl_vehiculos_editar(req, id_vehiculo)
 
 @rt("/vehiculos/actualizar")
 def post(req, id_vehiculo: int, id_cliente: int, placa: str, marca: str, modelo: str, anio: int):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return vehiculos_actualizar(req, id_vehiculo, id_cliente, placa, marca, modelo, anio)
+    return ctrl_vehiculos_actualizar(req, id_vehiculo, id_cliente, placa, marca, modelo, anio)
 
 @rt("/vehiculos/eliminar")
 def post(req, id_vehiculo: int):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return vehiculos_eliminar(req, id_vehiculo)
+    return ctrl_vehiculos_eliminar(req, id_vehiculo)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -366,27 +375,27 @@ def post(req, id_vehiculo: int):
 @rt("/empleados")
 def get(req):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return empleados_list(req)
+    return ctrl_empleados_list(req)
 
 @rt("/empleados/nuevo")
 def get(req):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return empleados_nuevo(req)
+    return ctrl_empleados_nuevo(req)
 
 @rt("/empleados/crear")
 def post(req, nombre: str, cargo: str, especialidad: str):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return empleados_crear(req, nombre, cargo, especialidad)
+    return ctrl_empleados_crear(req, nombre, cargo, especialidad)
 
 @rt("/empleados/{id_empleado}/editar")
 def get(req, id_empleado: int):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return empleados_editar(req, id_empleado)
+    return ctrl_empleados_editar(req, id_empleado)
 
 @rt("/empleados/actualizar")
 def post(req, id_empleado: int, nombre: str, cargo: str, especialidad: str):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return empleados_actualizar(req, id_empleado, nombre, cargo, especialidad)
+    return ctrl_empleados_actualizar(req, id_empleado, nombre, cargo, especialidad)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -395,43 +404,43 @@ def post(req, id_empleado: int, nombre: str, cargo: str, especialidad: str):
 @rt("/ordenes")
 def get(req):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return ordenes_list(req)
+    return ctrl_ordenes_list(req)
 
 @rt("/ordenes/nueva")
 def get(req):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return ordenes_nueva(req)
+    return ctrl_ordenes_nueva(req)
 
 @rt("/ordenes/crear")
 def post(req, id_vehiculo: int, id_empleado: int, fecha_ingreso: str, fecha_entrega: str):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return ordenes_crear(req, id_vehiculo, id_empleado, fecha_ingreso, fecha_entrega)
+    return ctrl_ordenes_crear(req, id_vehiculo, id_empleado, fecha_ingreso, fecha_entrega)
 
 @rt("/ordenes/{id_orden}")
 def get(req, id_orden: int):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return ordenes_detalle(req, id_orden)
+    return ctrl_ordenes_detalle(req, id_orden)
 
 @rt("/ordenes/{id_orden}/editar")
 def get(req, id_orden: int):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return ordenes_editar(req, id_orden)
+    return ctrl_ordenes_editar(req, id_orden)
 
 @rt("/ordenes/actualizar")
 def post(req, id_orden: int, id_vehiculo: int, id_empleado: int,
          fecha_ingreso: str, fecha_entrega: str, estado: str):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return ordenes_actualizar(req, id_orden, id_vehiculo, id_empleado, fecha_ingreso, fecha_entrega, estado)
+    return ctrl_ordenes_actualizar(req, id_orden, id_vehiculo, id_empleado, fecha_ingreso, fecha_entrega, estado)
 
 @rt("/ordenes/cambiar-estado")
 def post(req, id_orden: int, estado: str):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return ordenes_cambiar_estado(req, id_orden, estado)
+    return ctrl_ordenes_cambiar_estado(req, id_orden, estado)
 
 @rt("/ordenes/agregar-repuesto")
 def post(req, id_orden: int, id_pieza: int, cantidad: int, precio_unitario: float):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return ordenes_agregar_repuesto(req, id_orden, id_pieza, cantidad, precio_unitario)
+    return ctrl_ordenes_agregar_repuesto(req, id_orden, id_pieza, cantidad, precio_unitario)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -440,32 +449,32 @@ def post(req, id_orden: int, id_pieza: int, cantidad: int, precio_unitario: floa
 @rt("/repuestos")
 def get(req):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return repuestos_list(req)
+    return ctrl_repuestos_list(req)
 
 @rt("/repuestos/nuevo")
 def get(req):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return repuestos_nuevo(req)
+    return ctrl_repuestos_nuevo(req)
 
 @rt("/repuestos/crear")
 def post(req, codigo: str, nombre: str, stock: int, precio_venta: float, proveedor: str):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return repuestos_crear(req, codigo, nombre, stock, precio_venta, proveedor)
+    return ctrl_repuestos_crear(req, codigo, nombre, stock, precio_venta, proveedor)
 
 @rt("/repuestos/{id_pieza}/editar")
 def get(req, id_pieza: int):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return repuestos_editar(req, id_pieza)
+    return ctrl_repuestos_editar(req, id_pieza)
 
 @rt("/repuestos/actualizar")
 def post(req, id_pieza: int, codigo: str, nombre: str, stock: int, precio_venta: float, proveedor: str):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return repuestos_actualizar(req, id_pieza, codigo, nombre, stock, precio_venta, proveedor)
+    return ctrl_repuestos_actualizar(req, id_pieza, codigo, nombre, stock, precio_venta, proveedor)
 
 @rt("/repuestos/eliminar")
 def post(req, id_pieza: int):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return repuestos_eliminar(req, id_pieza)
+    return ctrl_repuestos_eliminar(req, id_pieza)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -474,27 +483,27 @@ def post(req, id_pieza: int):
 @rt("/facturas")
 def get(req):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return facturas_list(req)
+    return ctrl_facturas_list(req)
 
 @rt("/facturas/nueva")
 def get(req):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return facturas_nueva(req)
+    return ctrl_facturas_nueva(req)
 
 @rt("/facturas/crear")
 def post(req, id_orden: int, total: float, metodo_pago: str):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return facturas_crear(req, id_orden, total, metodo_pago)
+    return ctrl_facturas_crear(req, id_orden, total, metodo_pago)
 
 @rt("/facturas/{id_factura}")
 def get(req, id_factura: int):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return facturas_detalle(req, id_factura)
+    return ctrl_facturas_detalle(req, id_factura)
 
 @rt("/facturas/cambiar-estado")
 def post(req, id_factura: int, estado_pago: str):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return facturas_cambiar_estado(req, id_factura, estado_pago)
+    return ctrl_facturas_cambiar_estado(req, id_factura, estado_pago)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -503,33 +512,33 @@ def post(req, id_factura: int, estado_pago: str):
 @rt("/usuarios")
 def get(req):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return usuarios_list(req)
+    return ctrl_usuarios_list(req)
 
 @rt("/usuarios/nuevo")
 def get(req):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return usuarios_nuevo(req)
+    return ctrl_usuarios_nuevo(req)
 
 @rt("/usuarios/crear")
 def post(req, id_empleado: int, username: str, password: str, rol: str):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return usuarios_crear(req, id_empleado, username, password, rol)
+    return ctrl_usuarios_crear(req, id_empleado, username, password, rol)
 
 @rt("/usuarios/{id_usuario}/editar")
 def get(req, id_usuario: int):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return usuarios_editar(req, id_usuario)
+    return ctrl_usuarios_editar(req, id_usuario)
 
 @rt("/usuarios/actualizar")
 def post(req, id_usuario: int, id_empleado: int, username: str,
          password: str, rol: str, estado: str):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return usuarios_actualizar(req, id_usuario, id_empleado, username, password, rol, estado)
+    return ctrl_usuarios_actualizar(req, id_usuario, id_empleado, username, password, rol, estado)
 
 @rt("/usuarios/desactivar")
 def post(req, id_usuario: int):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return usuarios_desactivar(req, id_usuario)
+    return ctrl_usuarios_desactivar(req, id_usuario)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -538,7 +547,7 @@ def post(req, id_usuario: int):
 @rt("/catalogo")
 def get(req):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return catalogo_list(req)
+    return ctrl_catalogo_list(req)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -547,23 +556,23 @@ def get(req):
 @rt("/bitacora")
 def get(req):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return bitacora_list(req)
+    return ctrl_bitacora_list(req)
 
 @rt("/bitacora/nueva")
 def get(req):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return bitacora_nueva(req)
+    return ctrl_bitacora_nueva(req)
 
 @rt("/bitacora/crear")
 def post(req, id_orden: int, mecanico: str, sintomas: str,
          codigos_obd: str, hallazgos: str, mano_de_obra: float):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return bitacora_crear(req, id_orden, mecanico, sintomas, codigos_obd, hallazgos, mano_de_obra)
+    return ctrl_bitacora_crear(req, id_orden, mecanico, sintomas, codigos_obd, hallazgos, mano_de_obra)
 
 @rt("/bitacora/{id_orden}")
 def get(req, id_orden: int):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return bitacora_detalle(req, id_orden)
+    return ctrl_bitacora_detalle(req, id_orden)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -572,12 +581,30 @@ def get(req, id_orden: int):
 @rt("/reportes")
 def get(req):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return reportes_list(req)
+    return ctrl_reportes_list(req)
 
 @rt("/reportes/detalle")
 def get(req):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return reportes_detalle(req)
+    return ctrl_reportes_detalle(req)
+
+# ═══════════════════════════════════════════════════════════════════════
+# HISTORIAL, COTIZACIONES, PROVEEDORES (MongoDB)
+# ═══════════════════════════════════════════════════════════════════════
+@rt("/historial")
+def get(req):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return ctrl_historial_list(req)
+
+@rt("/cotizaciones")
+def get(req):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return ctrl_cotizaciones_list(req)
+
+@rt("/proveedores")
+def get(req):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return ctrl_proveedores_list(req)
 
 
 # ═══════════════════════════════════════════════════════════════════════

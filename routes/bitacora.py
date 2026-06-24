@@ -1,42 +1,33 @@
 """
-routes/bitacora.py — Bitácora de Diagnóstico (MongoDB simulado)
+routes/bitacora.py — View puro de Bitácora de Diagnóstico
+=========================================================
+Solo renderiza HTML. Lógica en controllers/bitacora_ctrl.py.
 """
 from fasthtml.common import *
-from database import get_oracle_connection, get_mongo_connection
-from auth import puede_acceder, registrar_accion
-from .helpers import layout, no_perm, badge_estado
+from auth import puede_acceder
+from .helpers import layout
 
-
-def bitacora_list(req):
-    usuario = req.session.get("usuario")
-    if not puede_acceder(usuario, "bitacora", "ver"):
-        return no_perm(req)
-
-    mongo = get_mongo_connection()
-    db = get_oracle_connection()
-    bitacoras = mongo.get_all_bitacoras()
-
+def render_bitacora_list(req, usuario, bitacoras):
+    """Renderiza la lista de bitácoras de diagnóstico."""
     msg = req.query_params.get("msg", "")
-    alert = Div("✅ Bitácora registrada correctamente.", cls="alert alert-success") if msg == "creada" else ""
+    alert = Div("✅ Bitácora registrada correctamente.", cls="alert alert-success") \
+        if msg == "creado" else ""
 
     filas = []
     for b in bitacoras:
         sintomas_tags = Div(*[Span(s, cls="tag") for s in b.get("sintomas", [])], cls="tag-list")
-        codigos = b.get("codigos_obd", [])
-        codigos_tags = Div(*[Span(c, cls="tag-obd") for c in codigos], cls="tag-list") if codigos else Span("—", cls="text-muted")
-        orden = db.get_orden(b["id_orden_ref"])
-        placa = ""
-        if orden:
-            v = db.get_vehiculo(orden["id_vehiculo"])
-            placa = v["placa"] if v else ""
+        codigos = b.get("codigo_OBD", [])
+        codigos_tags = Div(*[Span(c, cls="tag-obd") for c in codigos], cls="tag-list") \
+            if codigos else Span("—", cls="text-muted")
+
+        id_vehiculo = b.get("idVehiculo", "?")
 
         filas.append(Tr(
-            Td(f"#{b['id_orden_ref']}" + (f" — {placa}" if placa else ""), cls="font-mono text-sm"),
-            Td(b["fecha"]),
-            Td(b["mecanico"]),
+            Td(f"Vehículo #{id_vehiculo}", cls="font-mono text-sm"),
+            Td(str(b.get("idEmpleado", "—"))),
             Td(sintomas_tags),
             Td(codigos_tags),
-            Td(A("👁️ Ver", href=f"/bitacora/{b['id_orden_ref']}", cls="btn btn-sm btn-secondary")),
+            Td(A("👁️ Ver", href=f"/bitacora/{id_vehiculo}", cls="btn btn-sm btn-secondary")),
         ))
 
     crear_btn = A("＋ Nueva Bitácora", href="/bitacora/nueva", cls="btn btn-primary") \
@@ -44,8 +35,8 @@ def bitacora_list(req):
 
     tabla = Div(
         Table(
-            Thead(Tr(Th("Orden"), Th("Fecha"), Th("Mecánico"), Th("Síntomas"), Th("Códigos OBD"), Th("Acciones"))),
-            Tbody(*filas) if filas else Tbody(Tr(Td("Sin bitácoras.", colspan="6", cls="no-data"))),
+            Thead(Tr(Th("Vehículo"), Th("ID Empleado"), Th("Síntomas"), Th("Códigos OBD"), Th("Acciones"))),
+            Tbody(*filas) if filas else Tbody(Tr(Td("Sin bitácoras.", colspan="5", cls="no-data"))),
         ),
         cls="table-wrap"
     )
@@ -66,31 +57,23 @@ def bitacora_list(req):
     return layout(req, "Bitácora", "📝 Bitácora de Diagnóstico", "Base de datos MongoDB", contenido)
 
 
-def bitacora_detalle(req, id_orden: int):
-    usuario = req.session.get("usuario")
-    if not puede_acceder(usuario, "bitacora", "ver"):
-        return no_perm(req)
+def render_bitacora_detalle(req, bitacora, vehiculo):
+    """Renderiza el detalle de una bitácora."""
+    if not bitacora:
+        from fasthtml.common import RedirectResponse
+        return RedirectResponse("/bitacora", status_code=303)
 
-    mongo = get_mongo_connection()
-    db = get_oracle_connection()
-    b = mongo.get_bitacora_by_orden(id_orden)
-
-    if not b:
-        return RedirectResponse(f"/bitacora?no_encontrado={id_orden}", status_code=303)
-
-    orden = db.get_orden_detallada(id_orden)
-    cliente = orden.get("cliente") or {} if orden else {}
-    vehiculo = orden.get("vehiculo") or {} if orden else {}
-
-    sintomas = b.get("sintomas", [])
-    codigos = b.get("codigos_obd", [])
-    fotos = b.get("fotos", [])
+    id_vehiculo = bitacora.get("idVehiculo", "?")
+    vehiculo_desc = f"{vehiculo.get('marca','')} {vehiculo.get('modelo','')} — {vehiculo.get('placa','')}" if vehiculo else "—"
+    sintomas = bitacora.get("sintomas", [])
+    codigos  = bitacora.get("codigo_OBD", [])
+    fotos    = bitacora.get("fotografias_url", [])
 
     contenido = Div(
         Div(
             Div(
                 Div(
-                    H2(f"📝 Bitácora — Orden #{id_orden}"),
+                    H2(f"📝 Bitácora — Vehículo #{id_vehiculo}"),
                     Span("MongoDB", cls="db-tag mongo"),
                 ),
                 A("← Volver", href="/bitacora", cls="btn btn-secondary btn-sm"),
@@ -98,31 +81,27 @@ def bitacora_detalle(req, id_orden: int):
             ),
             Div(
                 Div(
-                    Div(Label("Orden de referencia"), Div(f"#{id_orden}", cls="detail-value font-mono"), cls="detail-item"),
-                    Div(Label("Fecha diagnóstico"), Div(b.get("fecha","—"), cls="detail-value"), cls="detail-item"),
-                    Div(Label("Mecánico"), Div(b.get("mecanico","—"), cls="detail-value"), cls="detail-item"),
-                    Div(Label("Cliente"), Div(cliente.get("nombre","—"), cls="detail-value"), cls="detail-item"),
-                    Div(Label("Vehículo"), Div(f"{vehiculo.get('marca','')} {vehiculo.get('modelo','')} — {vehiculo.get('placa','')}", cls="detail-value"), cls="detail-item"),
-                    Div(Label("Mano de obra (S/.)"), Div(f"S/. {b.get('mano_de_obra',0):.2f}", cls="detail-value", style="color:var(--accent);font-weight:700;"), cls="detail-item"),
+                    Div(Label("Vehículo Referencia"),    Div(f"#{id_vehiculo}", cls="detail-value font-mono"), cls="detail-item"),
+                    Div(Label("ID Empleado"),            Div(str(bitacora.get("idEmpleado", "—")), cls="detail-value"), cls="detail-item"),
+                    Div(Label("Cod. Especificación"),    Div(bitacora.get("codigoEspecificacion", "—"), cls="detail-value"), cls="detail-item"),
+                    Div(Label("Vehículo Datos"),         Div(vehiculo_desc, cls="detail-value"), cls="detail-item"),
                     cls="detail-grid"
                 ),
                 Div(style="margin-top:1.5rem;"),
                 Div(
                     Div(
-                        Div(
-                            Span("🩺 Síntomas reportados", style="font-size:.75rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;"),
-                            Div(*[Span(s, cls="tag") for s in sintomas], cls="tag-list mt-1") if sintomas else P("Sin síntomas.", cls="text-muted text-sm mt-1"),
-                            style="margin-bottom:1.25rem;"
-                        ),
-                        Div(
-                            Span("🔴 Códigos OBD detectados", style="font-size:.75rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;"),
-                            Div(*[Span(c, cls="tag-obd") for c in codigos], cls="tag-list mt-1") if codigos else P("Sin códigos OBD.", cls="text-muted text-sm mt-1"),
-                            style="margin-bottom:1.25rem;"
-                        ),
-                        Div(
-                            Span("📋 Hallazgos y diagnóstico", style="font-size:.75rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;"),
-                            P(b.get("hallazgos","—"), style="margin-top:.5rem;color:var(--text-secondary);font-size:.875rem;line-height:1.6;"),
-                        ),
+                        Span("🩺 Síntomas reportados", style="font-size:.75rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;"),
+                        Div(*[Span(s, cls="tag") for s in sintomas], cls="tag-list mt-1") if sintomas else P("Sin síntomas.", cls="text-muted text-sm mt-1"),
+                        style="margin-bottom:1.25rem;"
+                    ),
+                    Div(
+                        Span("🔴 Códigos OBD detectados", style="font-size:.75rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;"),
+                        Div(*[Span(c, cls="tag-obd") for c in codigos], cls="tag-list mt-1") if codigos else P("Sin códigos OBD.", cls="text-muted text-sm mt-1"),
+                        style="margin-bottom:1.25rem;"
+                    ),
+                    Div(
+                        Span("📋 Observaciones", style="font-size:.75rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;"),
+                        P(bitacora.get("observaciones", "—"), style="margin-top:.5rem;color:var(--text-secondary);font-size:.875rem;line-height:1.6;"),
                     ),
                 ),
                 Div(style="margin-top:1rem;"),
@@ -136,49 +115,39 @@ def bitacora_detalle(req, id_orden: int):
         ),
         cls="page-body"
     )
-    return layout(req, f"Bitácora #{id_orden}", f"📝 Bitácora de Diagnóstico #{id_orden}", "", contenido)
+    return layout(req, f"Bitácora #{id_vehiculo}", f"📝 Bitácora de Diagnóstico #{id_vehiculo}", "", contenido)
 
 
-def bitacora_nueva(req):
-    usuario = req.session.get("usuario")
-    if not puede_acceder(usuario, "bitacora", "crear"):
-        return no_perm(req)
+def render_bitacora_nueva(req, vehiculos):
+    """Renderiza el formulario de nueva bitácora."""
+    error = req.query_params.get("error", "")
+    alert = Div(f"❌ {error}", cls="alert alert-error") if error else ""
 
-    db = get_oracle_connection()
-    mongo = get_mongo_connection()
-    ordenes = db.get_all_ordenes()
-    ids_con_bit = {b["id_orden_ref"] for b in mongo.get_all_bitacoras()}
-    ordenes_disp = [o for o in ordenes if o["id_orden"] not in ids_con_bit]
-
-    empleados = db.get_all_empleados()
-    mecanicos = [e for e in empleados if "mecán" in e.get("especialidad","").lower() or
-                 e.get("cargo","") in ["Jefe de Taller","Mecánico Senior","Mecánico","Electricista Automotriz"]]
-
-    opts_o = [Option(f"Orden #{o['id_orden']} — {o.get('nombre_cliente','?')} / {o['placa']}", value=str(o["id_orden"])) for o in ordenes_disp]
-    opts_m = [Option(f"{e['nombre']}", value=e["nombre"]) for e in (mecanicos or empleados)]
+    opts_v = [Option(f"Vehículo #{v['id_vehiculo']} — {v.get('marca','?')} {v.get('modelo','')} / {v.get('placa','')}", value=str(v["id_vehiculo"])) for v in vehiculos]
 
     form = Form(
+        alert,
         Div(
-            Div(Label("Orden de Trabajo"),
-                Select(Option("-- Seleccionar --", value=""), *opts_o, name="id_orden", required=True),
+            Div(Label("Vehículo"),
+                Select(Option("-- Seleccionar --", value=""), *opts_v, name="id_vehiculo", required=True),
                 cls="form-group"),
-            Div(Label("Mecánico responsable"),
-                Select(*opts_m, name="mecanico", required=True),
+            Div(Label("ID Empleado responsable"),
+                Input(name="id_empleado", type="number", placeholder="1", required=True),
                 cls="form-group"),
-            Div(Label("Mano de obra (S/.)"),
-                Input(name="mano_de_obra", type="number", step="0.01", min="0", placeholder="0.00", required=True),
+            Div(Label("Código Especificación"),
+                Input(name="codigo_especificacion", placeholder="ESP-TOY-001", required=True),
                 cls="form-group"),
             cls="form-grid"
         ),
         Div(
-            Div(Label("Síntomas reportados (uno por línea)"),
-                Textarea(name="sintomas", placeholder="Motor hace ruido\nVibración al frenar\nCheck engine encendido", rows="4", required=True),
+            Div(Label("Síntomas reportados (separados por coma)"),
+                Input(name="sintomas", placeholder="Motor hace ruido, Vibración al frenar", required=True),
                 cls="form-group full-width"),
             Div(Label("Códigos OBD detectados (separados por coma, dejar vacío si no aplica)"),
                 Input(name="codigos_obd", placeholder="P0300, C0031"),
                 cls="form-group full-width"),
-            Div(Label("Hallazgos y diagnóstico detallado"),
-                Textarea(name="hallazgos", placeholder="Descripción detallada del diagnóstico...", rows="5", required=True),
+            Div(Label("Observaciones"),
+                Textarea(name="observaciones", placeholder="Observaciones detalladas del diagnóstico...", rows="5", required=True),
                 cls="form-group full-width"),
             cls="form-grid"
         ),
@@ -203,18 +172,3 @@ def bitacora_nueva(req):
         cls="page-body"
     )
     return layout(req, "Nueva Bitácora", "📝 Nueva Bitácora", "Guardar en MongoDB", contenido)
-
-
-def bitacora_crear(req, id_orden: int, mecanico: str, sintomas: str,
-                   codigos_obd: str, hallazgos: str, mano_de_obra: float):
-    usuario = req.session.get("usuario")
-    if not puede_acceder(usuario, "bitacora", "crear"):
-        return no_perm(req)
-
-    mongo = get_mongo_connection()
-    lista_sintomas = [s.strip() for s in sintomas.split("\n") if s.strip()]
-    lista_codigos = [c.strip() for c in codigos_obd.split(",") if c.strip()] if codigos_obd else []
-
-    mongo.create_bitacora(id_orden, mecanico.strip(), lista_sintomas, lista_codigos, hallazgos.strip(), mano_de_obra)
-    registrar_accion(usuario, "CREAR", "bitacora")
-    return RedirectResponse("/bitacora?msg=creada", status_code=303)

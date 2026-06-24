@@ -1,26 +1,20 @@
 """
-routes/reportes.py — Reporte Combinado Oracle + MongoDB
-Muestra una orden de trabajo (Oracle) fusionada con su bitácora de diagnóstico (MongoDB)
-usando id_orden como campo puente.
+routes/reportes.py — View puro de Reportes
+==========================================
+Solo renderiza HTML. Lógica en controllers/reportes_ctrl.py.
 """
 from fasthtml.common import *
-from database import get_oracle_connection, get_mongo_connection
-from auth import puede_acceder
-from .helpers import layout, no_perm, badge_estado, badge_pago
+from .helpers import layout, badge_estado, badge_pago
 
 
-def reportes_list(req):
-    usuario = req.session.get("usuario")
-    if not puede_acceder(usuario, "reportes", "ver"):
-        return no_perm(req)
-
-    db = get_oracle_connection()
-    mongo = get_mongo_connection()
-    ordenes = db.get_all_ordenes()
-    logs = mongo.get_logs(limit=10)
-
+def render_reportes_list(req, ordenes, logs, resumen):
+    """Renderiza la pantalla principal de reportes (Dashboard)."""
     # Selector de orden para reporte detallado
-    opts_o = [Option(f"Orden #{o['id_orden']} — {o.get('nombre_cliente','?')} / {o['placa']} ({o['estado']})", value=str(o["id_orden"])) for o in ordenes]
+    opts_o = [
+        Option(f"Orden #{o['id_orden']} — {o.get('nombre_cliente','?')} / {o['placa']} ({o['estado']})",
+               value=str(o["id_orden"]))
+        for o in ordenes
+    ]
 
     selector = Form(
         Div(
@@ -33,31 +27,23 @@ def reportes_list(req):
         method="get", action="/reportes/detalle"
     )
 
-    # Estadísticas generales
-    facturas = db.get_all_facturas()
-    repuestos = db.get_all_repuestos()
-    bitacoras = mongo.get_all_bitacoras()
-    alertas = mongo.get_alertas_activas()
-
     stats = Div(
-        Div(Div("📋", cls="stat-icon orange"), Div(Div(str(len(ordenes)), cls="stat-value"), Div("Órdenes Totales", cls="stat-label"), cls="stat-info"), cls="stat-card"),
-        Div(Div("🧾", cls="stat-icon blue"),   Div(Div(str(len(facturas)), cls="stat-value"), Div("Facturas Emitidas", cls="stat-label"), cls="stat-info"), cls="stat-card"),
-        Div(Div("📝", cls="stat-icon green"),  Div(Div(str(len(bitacoras)), cls="stat-value"), Div("Bitácoras", cls="stat-label"), cls="stat-info"), cls="stat-card"),
-        Div(Div("🔔", cls="stat-icon yellow"), Div(Div(str(len(alertas)), cls="stat-value"), Div("Alertas Activas", cls="stat-label"), cls="stat-info"), cls="stat-card"),
+        Div(Div("📋", cls="stat-icon orange"), Div(Div(str(resumen["total_ordenes"]), cls="stat-value"), Div("Órdenes Totales", cls="stat-label"), cls="stat-info"), cls="stat-card"),
+        Div(Div("🧾", cls="stat-icon blue"),   Div(Div(str(resumen["total_facturas"]), cls="stat-value"), Div("Facturas Emitidas", cls="stat-label"), cls="stat-info"), cls="stat-card"),
+        Div(Div("📝", cls="stat-icon green"),  Div(Div(str(resumen["total_bitacoras"]), cls="stat-value"), Div("Bitácoras", cls="stat-label"), cls="stat-info"), cls="stat-card"),
+        Div(Div("🔔", cls="stat-icon yellow"), Div(Div(str(resumen["alertas_activas"]), cls="stat-value"), Div("Alertas Activas", cls="stat-label"), cls="stat-info"), cls="stat-card"),
         cls="stats-grid"
     )
 
     # Log de actividad reciente
     filas_log = []
     for log in logs:
-        resultado_badge = Span("✅ Exitoso", cls="badge badge-green") if log["resultado"] == "exitoso" else \
-                          Span("❌ Denegado", cls="badge badge-red") if log["resultado"] == "denegado" else \
-                          Span(log["resultado"], cls="badge badge-gray")
+        resultado_badge = Span("✅ Exitoso", cls="badge badge-green")  # El nuevo mock no tiene "resultado"
         filas_log.append(Tr(
-            Td(log["fecha_hora"], cls="font-mono text-sm"),
-            Td(f"Emp. #{log['id_empleado']}", cls="text-muted text-sm"),
-            Td(Span(log["accion"], style="font-weight:600;")),
-            Td(Span(log["modulo"], cls="badge badge-purple")),
+            Td(log.get("fecha_hora", ""), cls="font-mono text-sm"),
+            Td(f"Emp/Usr #{log.get('idUsuario', '?')}", cls="text-muted text-sm"),
+            Td(Span(log.get("accion", ""), style="font-weight:600;")),
+            Td(Span(log.get("entidad_afectada", ""), cls="badge badge-purple")),
             Td(resultado_badge),
         ))
 
@@ -89,39 +75,20 @@ def reportes_list(req):
     return layout(req, "Reportes", "📊 Reportes del Sistema", "Datos combinados Oracle + MongoDB", contenido)
 
 
-def reportes_detalle(req):
-    usuario = req.session.get("usuario")
-    if not puede_acceder(usuario, "reportes", "ver"):
-        return no_perm(req)
-
-    id_orden_str = req.query_params.get("id_orden", "")
-    if not id_orden_str.isdigit():
-        return RedirectResponse("/reportes", status_code=303)
-
-    id_orden = int(id_orden_str)
-    db = get_oracle_connection()
-    mongo = get_mongo_connection()
-
-    # ── Datos de Oracle ─────────────────────────────────────────────
-    orden = db.get_orden_detallada(id_orden)
-    if not orden:
-        return RedirectResponse("/reportes", status_code=303)
-
-    cliente = orden.get("cliente") or {}
-    vehiculo = orden.get("vehiculo") or {}
-    empleado = orden.get("empleado") or {}
-    detalles = orden.get("detalles", [])
-    factura = db.get_factura_por_orden(id_orden)
-    total_rep = sum(d["subtotal"] for d in detalles)
-
-    # ── Datos de MongoDB ─────────────────────────────────────────────
-    bitacora = mongo.get_bitacora_by_orden(id_orden)
-    catalogo = []
-    if vehiculo:
-        catalogo = mongo.buscar_catalogo(marca=vehiculo.get("marca",""), modelo=vehiculo.get("modelo",""),
-                                          año=vehiculo.get("año"))
-
-    esp_tecnica = catalogo[0] if catalogo else None
+def render_reportes_detalle(req, datos):
+    """Renderiza el reporte detallado de una orden integrando Oracle y Mongo."""
+    orden       = datos["orden"]
+    id_orden    = orden["id_orden"]
+    cliente     = datos["cliente"]
+    vehiculo    = datos["vehiculo"]
+    empleado    = datos["empleado"]
+    detalles    = datos["detalles"]
+    factura     = datos["factura"]
+    bitacora    = datos["bitacora"]
+    esp_tecnica = datos["esp_tecnica"]
+    total_rep   = datos["total_rep"]
+    mano_obra   = datos["mano_obra"]
+    gran_total  = datos["gran_total"]
 
     # ── Bloque Oracle ────────────────────────────────────────────────
     filas_rep = [
@@ -138,14 +105,14 @@ def reportes_detalle(req):
         ),
         Div(
             Div(Label("N° Orden"), Div(f"#{id_orden}", cls="detail-value font-mono"), cls="detail-item"),
-            Div(Label("Cliente"), Div(cliente.get("nombre","—"), cls="detail-value"), cls="detail-item"),
-            Div(Label("DNI"), Div(cliente.get("dni","—"), cls="detail-value"), cls="detail-item"),
+            Div(Label("Cliente"), Div(cliente.get("nombre", "—"), cls="detail-value"), cls="detail-item"),
+            Div(Label("DNI"), Div(cliente.get("dni", "—"), cls="detail-value"), cls="detail-item"),
             Div(Label("Vehículo"), Div(f"{vehiculo.get('marca','')} {vehiculo.get('modelo','')} {vehiculo.get('año','')}", cls="detail-value"), cls="detail-item"),
-            Div(Label("Placa"), Div(Span(vehiculo.get("placa","—"), cls="badge badge-gray font-mono"), cls="detail-value"), cls="detail-item"),
-            Div(Label("Mecánico"), Div(empleado.get("nombre","—"), cls="detail-value"), cls="detail-item"),
-            Div(Label("Ingreso"), Div(orden.get("fecha_ingreso","—"), cls="detail-value"), cls="detail-item"),
-            Div(Label("Entrega"), Div(orden.get("fecha_entrega","—"), cls="detail-value"), cls="detail-item"),
-            Div(Label("Estado Orden"), Div(badge_estado(orden.get("estado","pendiente")), cls="detail-value"), cls="detail-item"),
+            Div(Label("Placa"), Div(Span(vehiculo.get("placa", "—"), cls="badge badge-gray font-mono"), cls="detail-value"), cls="detail-item"),
+            Div(Label("Mecánico"), Div(empleado.get("nombre", "—"), cls="detail-value"), cls="detail-item"),
+            Div(Label("Ingreso"), Div(orden.get("fecha_ingreso", "—"), cls="detail-value"), cls="detail-item"),
+            Div(Label("Entrega"), Div(orden.get("fecha_entrega", "—"), cls="detail-value"), cls="detail-item"),
+            Div(Label("Estado Orden"), Div(badge_estado(orden.get("estado", "pendiente")), cls="detail-value"), cls="detail-item"),
             cls="detail-grid"
         ),
         Div(style="margin-top:1.25rem;"),
@@ -174,10 +141,8 @@ def reportes_detalle(req):
             ),
             style="margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid var(--border);"
         ),
-        cls="report-section"
+        cls="card-body"
     )
-    seccion_oracle.attrs["class"] = ""
-    seccion_oracle = Div(seccion_oracle, cls="card-body")
 
     # ── Bloque MongoDB — Bitácora ─────────────────────────────────────
     if bitacora:
@@ -190,9 +155,9 @@ def reportes_detalle(req):
                 style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;"
             ),
             Div(
-                Div(Label("Fecha diagnóstico"), Div(bitacora.get("fecha","—"), cls="detail-value"), cls="detail-item"),
-                Div(Label("Mecánico"), Div(bitacora.get("mecanico","—"), cls="detail-value"), cls="detail-item"),
-                Div(Label("Mano de obra"), Div(f"S/. {bitacora.get('mano_de_obra',0):.2f}", cls="detail-value", style="color:var(--accent);font-weight:700;"), cls="detail-item"),
+                Div(Label("Cod Diagnóstico"), Div(bitacora.get("codigoDiagnostico", "—"), cls="detail-value font-mono"), cls="detail-item"),
+                Div(Label("Emp ID"), Div(str(bitacora.get("idEmpleado", "—")), cls="detail-value"), cls="detail-item"),
+                Div(Label("Cod Especificación"), Div(bitacora.get("codigoEspecificacion", "—"), cls="detail-value font-mono"), cls="detail-item"),
                 cls="detail-grid"
             ),
             Div(style="margin-top:1rem;"),
@@ -207,8 +172,8 @@ def reportes_detalle(req):
                 style="margin-bottom:1rem;"
             ),
             Div(
-                Span("📋 Hallazgos", style="font-size:.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;"),
-                P(bitacora.get("hallazgos","—"), style="margin-top:.4rem;color:var(--text-secondary);font-size:.875rem;line-height:1.6;"),
+                Span("📋 Observaciones", style="font-size:.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;"),
+                P(bitacora.get("observaciones", "—"), style="margin-top:.4rem;color:var(--text-secondary);font-size:.875rem;line-height:1.6;"),
             ),
         )
     else:
@@ -219,14 +184,10 @@ def reportes_detalle(req):
                 style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;"
             ),
             Div("⚠️ Esta orden no tiene bitácora de diagnóstico registrada en MongoDB.", cls="alert alert-warning"),
-            A("➕ Crear Bitácora", href="/bitacora/nueva", cls="btn btn-primary btn-sm") if puede_acceder(usuario, "bitacora", "crear") else "",
         )
 
-    # ── Bloque MongoDB — Especificaciones Técnicas ────────────────────
     if esp_tecnica:
-        presion = esp_tecnica.get("presion_neumaticos", {})
-        frenos = esp_tecnica.get("tipo_frenos", {})
-        notas = esp_tecnica.get("notas_tecnicas", [])
+        det_tec = esp_tecnica.get("detalles_tecnicos", {})
         seccion_mongo_esp = Div(
             Div(
                 H2("📚 Especificaciones Técnicas del Vehículo"),
@@ -234,20 +195,14 @@ def reportes_detalle(req):
                 style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;"
             ),
             Div(
-                Div(Label("Motor"), Div(esp_tecnica.get("tipo_motor","—"), cls="detail-value"), cls="detail-item"),
-                Div(Label("Aceite recomendado"), Div(esp_tecnica.get("tipo_aceite","—"), cls="detail-value"), cls="detail-item"),
-                Div(Label("Capacidad aceite"), Div(f"{esp_tecnica.get('capacidad_aceite_L','?')} L", cls="detail-value"), cls="detail-item"),
-                Div(Label("Presión neumáticos"), Div(f"Del: {presion.get('delantera','?')} / Tra: {presion.get('trasera','?')}", cls="detail-value"), cls="detail-item"),
-                Div(Label("Frenos delantero"), Div(frenos.get("delantero","—"), cls="detail-value"), cls="detail-item"),
-                Div(Label("Frenos trasero"), Div(frenos.get("trasero","—"), cls="detail-value"), cls="detail-item"),
+                Div(Label("Cod Especificación"), Div(esp_tecnica.get("codigoEspecificacion", "—"), cls="detail-value font-mono"), cls="detail-item"),
+                Div(Label("Marca / Modelo"), Div(f"{esp_tecnica.get('marca','?')} / {esp_tecnica.get('modelo','?')}", cls="detail-value"), cls="detail-item"),
+                Div(Label("Motor"), Div(det_tec.get("motor", "—"), cls="detail-value"), cls="detail-item"),
+                Div(Label("Aceite recomendado"), Div(det_tec.get("aceite", "—"), cls="detail-value"), cls="detail-item"),
+                Div(Label("Transmisión"), Div(det_tec.get("transmision", "—"), cls="detail-value"), cls="detail-item"),
+                Div(Label("Batería / Bujías"), Div(f"{det_tec.get('batería','?')} {det_tec.get('bujias','')}", cls="detail-value"), cls="detail-item"),
                 cls="detail-grid"
-            ),
-            Div(style="margin-top:1rem;"),
-            Div(
-                Span("📝 Notas técnicas (Array MongoDB)", style="font-size:.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;"),
-                Ul(*[Li(n, style="color:var(--text-secondary);font-size:.82rem;margin-top:.3rem;") for n in notas],
-                   style="padding-left:1.2rem;margin-top:.5rem;") if notas else "",
-            ),
+            )
         )
     else:
         seccion_mongo_esp = Div(
@@ -255,9 +210,6 @@ def reportes_detalle(req):
         )
 
     # ── Resumen de costos ─────────────────────────────────────────────
-    mano_obra = bitacora.get("mano_de_obra", 0) if bitacora else 0
-    gran_total = total_rep + mano_obra
-
     resumen = Div(
         Div(
             Div(H2("💰 Resumen de Costos"), Span("Oracle + MongoDB", cls="badge badge-orange"), cls="card-header"),
@@ -276,7 +228,6 @@ def reportes_detalle(req):
     )
 
     contenido = Div(
-        # Encabezado
         Div(
             Div(
                 H2(f"📊 Reporte Integrado — Orden #{id_orden}"),
@@ -289,7 +240,7 @@ def reportes_detalle(req):
             ),
             Div(
                 P("Este reporte combina datos relacionales de Oracle con documentos de MongoDB, usando ",
-                  Strong("id_orden"), " como campo puente entre ambas bases de datos.", cls="text-muted text-sm"),
+                  Strong("id_vehiculo"), " como campo puente entre ambas bases de datos.", cls="text-muted text-sm"),
                 cls="card-body"
             ),
             cls="card mb-2"
