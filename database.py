@@ -167,7 +167,7 @@ class OracleDB:
     def get_all_empleados(self) -> List[Dict]:
         conn = self._get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id_empleado, nombre, cargo, especialidad FROM EMPLEADOS ORDER BY nombre")
+        cursor.execute("SELECT id_empleado, nombre, cargo, especialidad FROM EMPLEADOS ORDER BY id_empleado")
         result = self._rows_to_dicts(cursor)
         cursor.close()
         conn.close()

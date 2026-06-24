@@ -95,7 +95,8 @@ def login(username: str, password: str) -> Optional[Dict]:
         mongo.registrar_log(0, "LOGIN_FALLIDO", "auth", f"usuario_no_existe:{username}")
         return None
     
-    if usuario["password"] != password:
+    from security import verify_password
+    if not verify_password(password, usuario["password"]):
         mongo.registrar_log(usuario["id_empleado"], "LOGIN_FALLIDO", "auth", "contraseña_incorrecta")
         return None
     

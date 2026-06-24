@@ -5,6 +5,7 @@ Lógica de negocio para la gestión de Usuarios del sistema.
 """
 from typing import List, Optional, Dict
 from repositories.oracle.usuarios_repo import UsuarioRepository
+from security import hash_password
 
 
 class UsuarioService:
@@ -35,7 +36,8 @@ class UsuarioService:
             raise ValueError(f"Rol inválido: {rol}")
         if self._repo.get_by_username(username):
             raise ValueError(f"El username '{username}' ya está en uso.")
-        return self._repo.create(id_empleado, username, password, rol)
+        hashed_pwd = hash_password(password)
+        return self._repo.create(id_empleado, username, hashed_pwd, rol)
 
     def actualizar(self, id_usuario: int, id_empleado: int, username: str,
                    password: str, rol: str, estado: str) -> bool:
@@ -47,9 +49,13 @@ class UsuarioService:
         existente = self._repo.get_by_username(username)
         if existente and existente["id_usuario"] != id_usuario:
             raise ValueError(f"El username '{username}' ya está en uso.")
+        
+        final_password = None
+        if password and password.strip():
+            final_password = hash_password(password)
+            
         return self._repo.update(
-            id_usuario, username, rol, estado,
-            password if password and password.strip() else None
+            id_usuario, username, rol, estado, final_password
         )
 
     def desactivar(self, id_usuario: int) -> bool:
