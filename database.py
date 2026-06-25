@@ -107,7 +107,7 @@ class OracleDB:
         conn = self._get_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT *
+            SELECT id_vehiculo, placa, marca, modelo, anio, propietario AS nombre_cliente
             FROM VW_VEHICULOS
             ORDER BY id_vehiculo DESC
         """)
@@ -213,7 +213,8 @@ class OracleDB:
         conn = self._get_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT *
+            SELECT id_orden, cliente AS nombre_cliente, placa, mecanico AS nombre_empleado,
+                   fecha_ingreso, fecha_entrega, estado
             FROM VW_ORDENES_TRABAJO
             ORDER BY id_orden DESC
         """)
@@ -294,7 +295,7 @@ class OracleDB:
     def get_all_repuestos(self) -> List[Dict]:
         conn = self._get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM VW_INVENTARIO_REPUESTOS ORDER BY id_pieza")
+        cursor.execute("SELECT id_pieza, codigo, nombre, stock, precio_venta, proveedor, estado_stock FROM VW_INVENTARIO_REPUESTOS ORDER BY id_pieza")
         result = self._rows_to_dicts(cursor)
         cursor.close()
         conn.close()
@@ -390,7 +391,8 @@ class OracleDB:
         conn = self._get_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT *
+            SELECT id_factura, NULL AS id_orden, fecha, total, metodo_pago, estado_pago,
+                   cliente AS nombre_cliente, placa
             FROM VW_FACTURAS
             ORDER BY id_factura DESC
         """)
