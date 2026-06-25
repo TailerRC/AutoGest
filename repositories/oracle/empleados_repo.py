@@ -39,7 +39,7 @@ class EmpleadoRepository:
         resultado = [
             e for e in empleados
             if e.get("cargo") in cargos_taller
-            or "mecánic" in e.get("especialidad", "").lower()
+            or "mecánic" in (e.get("especialidad") or "").lower()
         ]
         return resultado or empleados  # fallback si no hay mecánicos
 
