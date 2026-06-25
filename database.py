@@ -208,6 +208,20 @@ class OracleDB:
         conn.close()
         return actualizado
 
+    def get_reporte_mecanicos(self) -> List[Dict]:
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id_empleado, nombre, especialidad, ordenes_atendidas,
+                   completadas, en_proceso, facturado_total
+            FROM VW_REPORTE_MECANICOS
+            ORDER BY ordenes_atendidas DESC
+        """)
+        result = self._rows_to_dicts(cursor)
+        cursor.close()
+        conn.close()
+        return result
+
     # ── ÓRDENES DE TRABAJO ────────────────────────────────────────────
     def get_all_ordenes(self) -> List[Dict]:
         conn = self._get_connection()

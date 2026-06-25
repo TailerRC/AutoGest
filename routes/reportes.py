@@ -7,7 +7,7 @@ from fasthtml.common import *
 from .helpers import layout, badge_estado, badge_pago
 
 
-def render_reportes_list(req, ordenes, logs, resumen):
+def render_reportes_list(req, ordenes, logs, resumen, mecanicos):
     """Renderiza la pantalla principal de reportes (Dashboard)."""
     # Selector de orden para reporte detallado
     opts_o = [
@@ -55,6 +55,26 @@ def render_reportes_list(req, ordenes, logs, resumen):
         cls="table-wrap"
     )
 
+    # Reporte de Mecánicos (Oracle View)
+    filas_mecanicos = []
+    for m in mecanicos:
+        filas_mecanicos.append(Tr(
+            Td(m["nombre"]),
+            Td(m["especialidad"]),
+            Td(str(m["ordenes_atendidas"])),
+            Td(str(m["completadas"]), cls="text-green"),
+            Td(str(m["en_proceso"]), cls="text-orange"),
+            Td(f"S/. {m.get('facturado_total') or 0:.2f}", style="font-weight:600;")
+        ))
+
+    tabla_mecanicos = Div(
+        Table(
+            Thead(Tr(Th("Mecánico"), Th("Especialidad"), Th("Órdenes Atendidas"), Th("Completadas"), Th("En Proceso"), Th("Total Facturado"))),
+            Tbody(*filas_mecanicos) if filas_mecanicos else Tbody(Tr(Td("Sin registros.", colspan="6", cls="no-data"))),
+        ),
+        cls="table-wrap"
+    )
+
     contenido = Div(
         stats,
         Div(
@@ -64,6 +84,11 @@ def render_reportes_list(req, ordenes, logs, resumen):
             ),
             Div(selector, cls="card-body"),
             cls="card mb-2"
+        ),
+        Div(
+            Div(H2("🧑‍🔧 Rendimiento de Mecánicos"), Span("Oracle View", cls="db-tag oracle"), cls="card-header"),
+            Div(tabla_mecanicos, cls="card-body"),
+            cls="card mb-2 fade-in"
         ),
         Div(
             Div(H2("📜 Log de Actividad Reciente"), Span("MongoDB", cls="db-tag mongo"), cls="card-header"),

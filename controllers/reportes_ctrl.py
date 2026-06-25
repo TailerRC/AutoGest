@@ -14,10 +14,15 @@ def ctrl_reportes_list(req):
     if not puede_acceder(usuario, "reportes", "ver"):
         from routes.helpers import no_perm
         return no_perm(req)
-    ordenes  = deps.reportes.get_ordenes_lista()
-    logs     = deps.reportes.get_logs_recientes(limit=10)
-    resumen  = deps.reportes.resumen_general()
-    return render_reportes_list(req, ordenes, logs, resumen)
+    ordenes   = deps.reportes.get_ordenes_lista()
+    logs      = deps.reportes.get_logs_recientes(limit=10)
+    resumen   = deps.reportes.resumen_general()
+    
+    from database import OracleDB
+    db = OracleDB()
+    mecanicos = db.get_reporte_mecanicos()
+    
+    return render_reportes_list(req, ordenes, logs, resumen, mecanicos)
 
 
 def ctrl_reportes_detalle(req):
