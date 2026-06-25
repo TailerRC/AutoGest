@@ -651,6 +651,17 @@ class MongoDB:
         """
         return self._remove_id_single(self.cotizaciones.find_one({"codigoCotizacion": codigo}))
 
+    def get_ultimo_codigo_cotizacion(self, prefix: str) -> Optional[str]:
+        """
+        Obtiene el último código de cotización registrado para un prefijo de año específico en MongoDB.
+        Utiliza el índice/ordenación nativo por codigoCotizacion descendente.
+        """
+        doc = self.cotizaciones.find_one(
+            {"codigoCotizacion": {"$regex": f"^{prefix}"}},
+            sort=[("codigoCotizacion", -1)]
+        )
+        return doc.get("codigoCotizacion") if doc else None
+
     def create_cotizacion(self, codigo: str, id_cliente: int, id_vehiculo: int,
                           fecha_validez: Any, servicios: list, total: float) -> Dict:
         """

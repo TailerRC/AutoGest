@@ -26,6 +26,12 @@ class CotizacionesRepository:
         """
         return self._db.get_cotizacion(codigo)
 
+    def get_ultimo_codigo(self, prefix: str) -> Optional[str]:
+        """
+        Obtiene el último código de cotización desde la base de datos documental.
+        """
+        return self._db.get_ultimo_codigo_cotizacion(prefix)
+
     def create(self, codigo: str, id_cliente: int, id_vehiculo: int,
                fecha_validez: Any, servicios: list, total: float) -> Dict:
         """

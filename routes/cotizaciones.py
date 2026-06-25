@@ -9,56 +9,56 @@ from auth import puede_acceder
 from .helpers import layout, badge_estado
 
 def render_cotizaciones_list(req, usuario, cotizaciones, q="", estado="todos", orden="fecha_desc", page=1, total_pages=1, total_count=0):
+    """
+    Renderiza la vista principal del listado de cotizaciones con filtros, búsqueda y paginación.
+    """
     filas = []
 
     for c in cotizaciones:
         servicios = c.get("servicios_repuestos", [])
 
-        # Mostrar 'item' en lugar de la inconsistencia 'descripcion'
-        items = Ul(
-            *[
-                Li(
-                    f"{s.get('item', '—')} - S/. {float(s.get('precio', 0)):.2f}"
-                )
-                for s in servicios
-            ],
-            style="padding-left:1.2rem; font-size:0.85rem; color:var(--text-secondary);"
-        )
+        # Mostrar la cantidad consolidada de ítems para un diseño minimalista
+        num_items = len(servicios)
+        items_str = f"{num_items} ítem" if num_items == 1 else f"{num_items} ítems"
 
         estado_badge = badge_estado(
             "Vigente" if c.get("vigente", False) else "Vencida"
         )
 
+        # Cada celda Td incluye su data_label para la transformación responsive a móviles
         filas.append(
             Tr(
                 Td(
                     Span(
                         c.get("codigoCotizacion", "—"),
                         cls="font-mono badge badge-gray"
-                    )
+                    ),
+                    data_label="Código"
                 ),
-                Td(c.get("cliente_str", "—")),
-                Td(c.get("vehiculo_str", "—")),
-                Td(c.get("fecha_validez_str", "—")),
-                Td(estado_badge),
-                Td(items),
+                Td(c.get("cliente_str", "—"), data_label="Cliente"),
+                Td(c.get("vehiculo_str", "—"), style="white-space:nowrap;", data_label="Vehículo"),
+                Td(c.get("fecha_validez_str", "—"), data_label="Válido Hasta"),
+                Td(estado_badge, data_label="Estado"),
+                Td(items_str, data_label="Items"),
                 Td(
                     f"S/. {c.get('total', 0):.2f}",
-                    style="font-weight:700; color:var(--accent);"
+                    style="font-weight:700; color:var(--accent); white-space:nowrap;",
+                    data_label="Total"
                 ),
                 Td(
                     A(
-                        "Ver Detalle",
+                        I(cls="fa-solid fa-eye"), " Ver Detalle",
                         href=f"/cotizaciones/{c['codigoCotizacion']}",
                         cls="btn btn-sm btn-secondary"
-                    )
+                    ),
+                    data_label="Acciones"
                 )
             )
         )
 
     crear_btn = (
         A(
-            "Nueva Cotización",
+            I(cls="fa-solid fa-plus"), " Nueva Cotización",
             href="/cotizaciones/nueva",
             cls="btn btn-primary"
         )
@@ -100,7 +100,7 @@ def render_cotizaciones_list(req, usuario, cotizaciones, q="", estado="todos", o
         Div(
             Div(
                 Label("Búsqueda"),
-                Input(name="q", placeholder="Código, cliente, placa...", value=q),
+                Input(name="q", placeholder="Código, cliente, placa, marca o modelo...", value=q),
                 cls="form-group"
             ),
             Div(
@@ -141,33 +141,73 @@ def render_cotizaciones_list(req, usuario, cotizaciones, q="", estado="todos", o
         style="padding:1.25rem; background:var(--bg-page); border:1.5px solid var(--border); border-radius:var(--radius); margin-bottom:1.5rem;"
     )
 
-    # Paginación
-    pag_prev = ""
+    # Generación de botones de páginas numeradas individuales (máximo 5 visibles alrededor de la actual)
+    max_visible = 5
+    half = max_visible // 2
+    
+    start_page = page - half
+    end_page = page + half
+    
+    if start_page < 1:
+        end_page += (1 - start_page)
+        start_page = 1
+        
+    if end_page > total_pages:
+        start_page -= (end_page - total_pages)
+        end_page = total_pages
+        if start_page < 1:
+            start_page = 1
+
+    page_buttons = []
+    for p in range(start_page, end_page + 1):
+        is_current = (p == page)
+        btn_cls = "btn btn-sm btn-primary" if is_current else "btn btn-sm btn-secondary"
+        page_buttons.append(
+            A(
+                str(p),
+                href=f"/cotizaciones?page={p}&q={q}&estado={estado}&orden={orden}",
+                cls=btn_cls,
+                style="min-width:32px; text-align:center;"
+            )
+        )
+
+    # Paginación Anterior / Siguiente
     if page > 1:
         pag_prev = A(
             I(cls="fa-solid fa-chevron-left"), " Anterior",
             href=f"/cotizaciones?page={page - 1}&q={q}&estado={estado}&orden={orden}",
             cls="btn btn-sm btn-secondary"
         )
+    else:
+        pag_prev = Span(
+            I(cls="fa-solid fa-chevron-left"), " Anterior",
+            cls="btn btn-sm btn-secondary disabled",
+            style="opacity:0.5; cursor:not-allowed;"
+        )
         
-    pag_next = ""
     if page < total_pages:
         pag_next = A(
             "Siguiente ", I(cls="fa-solid fa-chevron-right"),
             href=f"/cotizaciones?page={page + 1}&q={q}&estado={estado}&orden={orden}",
             cls="btn btn-sm btn-secondary"
         )
-        
-    start_item = (page - 1) * 10 + 1 if total_count > 0 else 0
-    end_item = min(page * 10, total_count)
+    else:
+        pag_next = Span(
+            "Siguiente ", I(cls="fa-solid fa-chevron-right"),
+            cls="btn btn-sm btn-secondary disabled",
+            style="opacity:0.5; cursor:not-allowed;"
+        )
     
+    start_item = (page - 1) * 6 + 1 if total_count > 0 else 0
+    end_item = min(page * 6, total_count)
+
     paginacion = Div(
-        Span(f"Mostrando {start_item}-{end_item} de {total_count} cotizaciones", cls="text-muted text-sm"),
+        Span(f"Mostrando {start_item}–{end_item} de {total_count} registros", cls="text-muted text-sm"),
         Div(
             pag_prev,
-            Span(f"Página {page} de {total_pages}", style="font-weight:600; color:var(--text-secondary); margin: 0 0.5rem;"),
+            *page_buttons,
             pag_next,
-            style="display:flex; align-items:center; gap:0.5rem;"
+            style="display:flex; align-items:center; gap:0.25rem;"
         ),
         style="display:flex; justify-content:space-between; align-items:center; margin-top:1.5rem; padding-top:1rem; border-top:1.5px solid var(--border);"
     )
@@ -176,7 +216,7 @@ def render_cotizaciones_list(req, usuario, cotizaciones, q="", estado="todos", o
 
     alert = (
         Div(
-            "Cotización generada exitosamente.",
+            I(cls="fa-solid fa-circle-check"), " Cotización generada exitosamente.",
             cls="alert alert-success"
         )
         if msg == "creado"
@@ -187,7 +227,7 @@ def render_cotizaciones_list(req, usuario, cotizaciones, q="", estado="todos", o
         alert,
         Div(
             Div(
-                H2("Cotizaciones"),
+                H2(I(cls="fa-solid fa-file-invoice-dollar"), " Cotizaciones"),
                 Span("MongoDB", cls="db-tag mongo"),
                 cls="card-header"
             ),
@@ -221,8 +261,11 @@ def render_cotizaciones_list(req, usuario, cotizaciones, q="", estado="todos", o
     )
 
 def render_cotizaciones_nueva(req, clientes, vehiculos):
+    """
+    Renderiza la vista del formulario dinámico de nueva cotización.
+    """
     error = req.query_params.get("error", "")
-    alert = Div(f"❌ {error}", cls="alert alert-error") if error else ""
+    alert = Div(I(cls="fa-solid fa-circle-exclamation"), f" {error}", cls="alert alert-error") if error else ""
 
     opts_c = [Option(f"{c['nombre']} ({c['dni']})", value=str(c["id_cliente"])) for c in clientes]
     opts_v = [Option(f"#{v['id_vehiculo']} — {v.get('marca','')} {v.get('modelo','')} ({v.get('placa','')})", value=str(v["id_vehiculo"])) for v in vehiculos]
@@ -350,7 +393,7 @@ def render_cotizaciones_nueva(req, clientes, vehiculos):
         Input(type="hidden", name="total", id="total", value="0"),
         Div(
             A("Cancelar", href="/cotizaciones", cls="btn btn-secondary"),
-            Button("Generar Cotización", type="submit", cls="btn btn-primary"),
+            Button(I(cls="fa-solid fa-plus"), " Generar Cotización", type="submit", cls="btn btn-primary"),
             cls="form-actions"
         ),
         method="post", action="/cotizaciones/crear", onsubmit="return validarFormulario(event)"
@@ -358,7 +401,7 @@ def render_cotizaciones_nueva(req, clientes, vehiculos):
 
     contenido = Div(
         Div(
-            Div(H2("Nueva Cotización"), A("← Volver", href="/cotizaciones", cls="btn btn-secondary btn-sm"), cls="card-header"),
+            Div(H2("Nueva Cotización"), A(I(cls="fa-solid fa-arrow-left"), " Volver", href="/cotizaciones", cls="btn btn-secondary btn-sm"), cls="card-header"),
             Div(form, cls="card-body"),
             cls="card fade-in"
         ),
@@ -368,6 +411,9 @@ def render_cotizaciones_nueva(req, clientes, vehiculos):
 
 
 def render_cotizaciones_detalle(req, cotizacion):
+    """
+    Renderiza la vista detallada de una cotización individual.
+    """
     if not cotizacion:
         return RedirectResponse("/cotizaciones", status_code=303)
 
@@ -376,7 +422,7 @@ def render_cotizaciones_detalle(req, cotizacion):
     filas_items = [
         Tr(
             Td(s.get("item", "—"), style="font-weight:500;"), 
-            Td(f"S/. {float(s.get('precio', 0)):.2f}", style="font-weight:600; color:var(--text-primary);")
+            Td(f"S/. {float(s.get('precio', 0)):.2f}", style="font-weight:600; color:var(--text-primary); white-space:nowrap;")
         )
         for s in servicios
     ]
@@ -385,10 +431,10 @@ def render_cotizaciones_detalle(req, cotizacion):
         Div(
             Div(
                 Div(
-                    H2(f"Cotización {cotizacion.get('codigoCotizacion')}"),
+                    H2(I(cls="fa-solid fa-file-invoice-dollar"), f" Cotización {cotizacion.get('codigoCotizacion')}"),
                     Span("MongoDB", cls="db-tag mongo"),
                 ),
-                A("← Volver", href="/cotizaciones", cls="btn btn-secondary btn-sm"),
+                A(I(cls="fa-solid fa-arrow-left"), " Volver", href="/cotizaciones", cls="btn btn-secondary btn-sm"),
                 cls="card-header"
             ),
             Div(
@@ -407,7 +453,7 @@ def render_cotizaciones_detalle(req, cotizacion):
                 ),
                 Div(
                     Span("Total General:", cls="text-muted", style="font-weight: 600;"),
-                    Span(f"S/. {cotizacion.get('total', 0):.2f}", style="font-size:1.3rem;font-weight:800;color:var(--accent); margin-left:0.5rem;"),
+                    Span(f"S/. {cotizacion.get('total', 0):.2f}", style="font-size:1.3rem;font-weight:800;color:var(--accent); margin-left:0.5rem; white-space:nowrap;"),
                     style="margin-top:1.5rem; text-align:right; padding:0.5rem; background:var(--bg-page); border-radius:var(--radius); display:flex; justify-content:flex-end; align-items:center;"
                 ),
                 cls="card-body"
@@ -417,4 +463,5 @@ def render_cotizaciones_detalle(req, cotizacion):
         cls="page-body"
     )
     return layout(req, f"Cotización {cotizacion.get('codigoCotizacion')}", "Detalle de Cotización", "", contenido)
+
 

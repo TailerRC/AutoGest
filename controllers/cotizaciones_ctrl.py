@@ -52,6 +52,8 @@ def ctrl_cotizaciones_list(req):
         c["cliente_str"] = cli["nombre"] if cli else "Desconocido"
         c["vehiculo_str"] = f"{veh['marca']} {veh['modelo']} ({veh['placa']})" if veh else "Desconocido"
         c["vehiculo_placa"] = veh["placa"] if veh else ""
+        c["vehiculo_marca"] = veh.get("marca", "") if veh else ""
+        c["vehiculo_modelo"] = veh.get("modelo", "") if veh else ""
 
         # Formatear la fecha de validez de manera segura
         fecha_val = c.get("fecha_validez")
@@ -76,8 +78,9 @@ def ctrl_cotizaciones_list(req):
             match_codigo = q in c.get("codigoCotizacion", "").lower()
             match_cliente = q in c.get("cliente_str", "").lower()
             match_placa = q in c.get("vehiculo_placa", "").lower()
-            match_vehiculo = q in c.get("vehiculo_str", "").lower()
-            if not (match_codigo or match_cliente or match_placa or match_vehiculo):
+            match_marca = q in c.get("vehiculo_marca", "").lower()
+            match_modelo = q in c.get("vehiculo_modelo", "").lower()
+            if not (match_codigo or match_cliente or match_placa or match_marca or match_modelo):
                 continue
 
         # Filtro de vigencia
@@ -113,8 +116,8 @@ def ctrl_cotizaciones_list(req):
     elif orden == "total_asc":
         filtered.sort(key=lambda x: get_sort_key(x, "total"), reverse=False)
 
-    # 6. Paginación de resultados (10 por página)
-    limit = 10
+    # 6. Paginación de resultados (6 por página)
+    limit = 6
     total_count = len(filtered)
     total_pages = max(1, (total_count + limit - 1) // limit)
     

@@ -78,8 +78,22 @@ class CotizacionesService:
                 "precio": precio
             })
             
-        # Generar código único para la cotización
-        codigo = f"COT-{uuid.uuid4().hex[:6].upper()}"
+        # Generar código correlativo incremental (COT-YYYY-NNN) para continuidad numérica NoSQL
+        year = datetime.now().year
+        prefix = f"COT-{year}-"
+        
+        ultimo_codigo = self._repo.get_ultimo_codigo(prefix)
+        if ultimo_codigo:
+            try:
+                # Extrae el correlativo del último código de cotización e incrementa el valor
+                partes = ultimo_codigo.split("-")
+                correlativo = int(partes[-1]) + 1
+            except (ValueError, IndexError):
+                correlativo = 1
+        else:
+            correlativo = 1
+            
+        codigo = f"{prefix}{correlativo:03d}"
         
         # Intentar parsear fecha a datetime.datetime para almacenamiento NoSQL estándar
         try:
