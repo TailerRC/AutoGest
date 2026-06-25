@@ -888,3 +888,52 @@ textarea { resize: vertical; min-height: 80px; }
 .chart-accent-2 { color: var(--blue-500); }        /* Azul Tecnológico */
 .chart-accent-3 { color: var(--cyan); }            /* Cian Turquesa */
 .chart-accent-4 { color: var(--brand-primary); }   /* Rojo Borgoña */
+
+/* ======================================================================
+   MÓDULO COTIZACIONES — Estilos de Negocio e Interfaz Corporativa
+   ====================================================================== */
+
+/* Caja de filtros y búsquedas con espaciado consistente */
+.filter-card {
+  box-shadow: var(--shadow-sm);
+  transition: all .2s ease;
+}
+.filter-card:hover {
+  box-shadow: var(--shadow);
+  border-color: var(--brand-secondary-light);
+}
+
+/* Formulario dinámico de servicios */
+#items-tbody tr:hover {
+  background: rgba(122, 12, 17, 0.02); /* Sutil tinte primario al pasar el mouse */
+}
+
+/* Detalle General y Totales */
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.detail-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-page);
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+/* Responsividad para pantallas pequeñas (<768px) */
+@media (max-width: 767px) {
+  .filter-card .form-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .form-actions {
+    flex-direction: column-reverse;
+  }
+  .form-actions a, .form-actions button {
+    width: 100%;
+    text-align: center;
+  }
+}

@@ -614,24 +614,45 @@ def post(req, id_vehiculo: int, kilometraje_ingreso: int, fecha_servicio: str, e
     if not require_login(req): return RedirectResponse("/login", status_code=303)
     return ctrl_historial_crear(req, id_vehiculo, kilometraje_ingreso, fecha_servicio, estado_final)
 
-# Cotizaciones
+# ── MÓDULO COTIZACIONES (MongoDB) ──────────────────────────────────────
+# Gestión NoSQL de proformas pre-servicio. Integra colecciones de MongoDB
+# con llaves foráneas a tablas relacionales de Oracle (Clientes/Vehículos).
+
 @rt("/cotizaciones")
 def get(req):
+    """
+    Ruta GET /cotizaciones
+    Lista las cotizaciones registradas. Soporta parámetros de consulta q, estado, orden y page
+    para búsqueda, filtrado, ordenamiento y paginación a nivel de controlador.
+    """
     if not require_login(req): return RedirectResponse("/login", status_code=303)
     return ctrl_cotizaciones_list(req)
 
 @rt("/cotizaciones/nueva")
 def get(req):
+    """
+    Ruta GET /cotizaciones/nueva
+    Muestra el formulario dinámico multilínea para redactar una proforma.
+    """
     if not require_login(req): return RedirectResponse("/login", status_code=303)
     return ctrl_cotizaciones_nueva(req)
 
 @rt("/cotizaciones/crear")
 def post(req, id_cliente: int, id_vehiculo: int, fecha_validez: str, items_json: str, total: float):
+    """
+    Ruta POST /cotizaciones/crear
+    Recibe la información en formato JSON desde el frontend para validar y guardar
+    el documento de cotización con ítems embebidos en MongoDB.
+    """
     if not require_login(req): return RedirectResponse("/login", status_code=303)
     return ctrl_cotizaciones_crear(req, id_cliente, id_vehiculo, fecha_validez, items_json, total)
 
 @rt("/cotizaciones/{codigo}")
 def get(req, codigo: str):
+    """
+    Ruta GET /cotizaciones/{codigo}
+    Muestra el detalle estructurado de una proforma consultando el documento en MongoDB.
+    """
     if not require_login(req): return RedirectResponse("/login", status_code=303)
     return ctrl_cotizaciones_detalle(req, codigo)
 
