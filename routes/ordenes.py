@@ -33,17 +33,17 @@ def render_ordenes_list(req, usuario, ordenes):
 
     filas = []
     for o in ordenes:
-        acciones = [A("👁️ Ver", href=f"/ordenes/{o['id_orden']}", cls="btn btn-sm btn-secondary")]
+        acciones = [A("👁️ Ver", href=f"/ordenes/{o.get('id_orden', '')}", cls="btn btn-sm btn-secondary")]
         if puede_acceder(usuario, "ordenes", "editar"):
-            acciones.append(A("✏️ Editar", href=f"/ordenes/{o['id_orden']}/editar", cls="btn btn-sm btn-blue"))
+            acciones.append(A("✏️ Editar", href=f"/ordenes/{o.get('id_orden', '')}/editar", cls="btn btn-sm btn-blue"))
         filas.append(Tr(
-            Td(f"#{o['id_orden']}", cls="font-mono text-muted text-sm"),
-            Td(Span(o["placa"], cls="badge badge-gray font-mono")),
+            Td(f"#{o.get('id_orden', '—')}", cls="font-mono text-muted text-sm"),
+            Td(Span(o.get("placa", "—"), cls="badge badge-gray font-mono")),
             Td(o.get("nombre_cliente", "—")),
-            Td(o["nombre_empleado"]),
-            Td(o["fecha_ingreso"]),
-            Td(o["fecha_entrega"]),
-            Td(badge_estado(o["estado"])),
+            Td(o.get("nombre_empleado", "—")),
+            Td(o.get("fecha_ingreso", "—")),
+            Td(o.get("fecha_entrega", "—")),
+            Td(badge_estado(o.get("estado", "—"))),
             Td(Div(*acciones, cls="flex gap-1")),
         ))
 

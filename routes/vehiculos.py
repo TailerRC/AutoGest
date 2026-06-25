@@ -36,10 +36,10 @@ def render_vehiculos_list(req, usuario, vehiculos, clientes):
                 )
             )
         filas.append(Tr(
-            Td(Span(v["placa"], cls="badge badge-gray font-mono")),
-            Td(f"{v['marca']} {v['modelo']}"),
-            Td(str(v.get("anio", v.get("año", "")))),
-            Td(v["nombre_cliente"]),
+            Td(Span(v.get("placa", "—"), cls="badge badge-gray font-mono")),
+            Td(f"{v.get('marca', '')} {v.get('modelo', '')}".strip()),
+            Td(str(v.get("anio", v.get("año", "—")))),
+            Td(v.get("nombre_cliente", "—")),
             Td(Div(*acciones, cls="flex gap-1") if acciones else "—"),
         ))
 

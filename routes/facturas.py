@@ -19,8 +19,8 @@ def render_facturas_list(req, usuario, facturas):
     }
     alert = alert_map.get(msg, "")
 
-    total_cobrado  = sum(f["total"] for f in facturas if f["estado_pago"] == "pagada")
-    total_pendiente = sum(f["total"] for f in facturas if f["estado_pago"] == "pendiente")
+    total_cobrado  = sum(f.get("total", 0) for f in facturas if f.get("estado_pago") == "pagada")
+    total_pendiente = sum(f.get("total", 0) for f in facturas if f.get("estado_pago") == "pendiente")
 
     stats = Div(
         Div(Div("🧾", cls="stat-icon orange"), Div(Div(str(len(facturas)), cls="stat-value"), Div("Total Facturas", cls="stat-label"), cls="stat-info"), cls="stat-card"),
@@ -29,28 +29,28 @@ def render_facturas_list(req, usuario, facturas):
         cls="stats-grid"
     )
 
-    ids_con_factura = {f["id_orden"] for f in facturas}
+    ids_con_factura = {f.get("id_orden") for f in facturas if f.get("id_orden")}
     filas = []
     for f in facturas:
-        acciones = [A("👁️ Ver", href=f"/facturas/{f['id_factura']}", cls="btn btn-sm btn-secondary")]
-        if puede_acceder(usuario, "facturas", "editar") and f["estado_pago"] == "pendiente":
+        acciones = [A("👁️ Ver", href=f"/facturas/{f.get('id_factura', '')}", cls="btn btn-sm btn-secondary")]
+        if puede_acceder(usuario, "facturas", "editar") and f.get("estado_pago") == "pendiente":
             acciones.append(
                 Form(
-                    Input(type="hidden", name="id_factura", value=str(f["id_factura"])),
+                    Input(type="hidden", name="id_factura", value=str(f.get("id_factura", ""))),
                     Input(type="hidden", name="estado_pago", value="pagada"),
                     Button("💰 Marcar Pagada", type="submit", cls="btn btn-sm btn-success"),
                     method="post", action="/facturas/cambiar-estado"
                 )
             )
         filas.append(Tr(
-            Td(f"F-{f['id_factura']:04d}", cls="font-mono"),
-            Td(f"#{f['id_orden']}"),
+            Td(f"#{f.get('id_factura', '—')}", cls="font-mono text-muted text-sm"),
+            Td(A(f"Ord. #{f.get('id_orden', '')}", href=f"/ordenes/{f.get('id_orden', '')}", cls="link") if f.get("id_orden") else "—"),
             Td(f.get("nombre_cliente", "—")),
-            Td(Span(f.get("placa", ""), cls="badge badge-gray font-mono")),
-            Td(f["fecha"]),
-            Td(f"S/. {f['total']:.2f}", style="font-weight:600;color:var(--accent)"),
-            Td(badge_pago(f["metodo_pago"])),
-            Td(badge_estado(f["estado_pago"])),
+            Td(Span(f.get("placa", "—"), cls="badge badge-gray font-mono")),
+            Td(f.get("fecha", "—")),
+            Td(f"S/. {f.get('total', 0):.2f}", style="font-weight:600; color:var(--text-main);"),
+            Td(badge_pago(f.get("metodo_pago", ""))),
+            Td(badge_estado(f.get("estado_pago", ""))),
             Td(Div(*acciones, cls="flex gap-1")),
         ))
 
