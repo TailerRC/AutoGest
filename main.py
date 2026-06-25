@@ -122,7 +122,7 @@ def get(req):
                 cls="logo-img-wrap"
             ),
             H1("AutoGest"),
-            P("Sistema de Gestión de Taller Mecánico"),
+            P("Sistema de Gestión de Taller Mecánico (Autogest)"),
             cls="login-logo"
         ),
         alert,
