@@ -107,11 +107,9 @@ class OracleDB:
         conn = self._get_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT v.id_vehiculo, v.id_cliente, v.placa, v.marca, v.modelo, v.anio,
-                   c.nombre AS nombre_cliente
-            FROM VEHICULOS v
-            JOIN CLIENTES c ON v.id_cliente = c.id_cliente
-            ORDER BY v.id_vehiculo
+            SELECT id_vehiculo, id_cliente, placa, marca, modelo, anio, nombre_cliente
+            FROM VW_VEHICULOS
+            ORDER BY id_vehiculo DESC
         """)
         result = self._rows_to_dicts(cursor)
         cursor.close()
@@ -215,14 +213,10 @@ class OracleDB:
         conn = self._get_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT o.id_orden, o.id_vehiculo, o.id_empleado, o.fecha_ingreso,
-                   o.fecha_entrega, o.estado,
-                   v.placa, e.nombre AS nombre_empleado, c.nombre AS nombre_cliente
-            FROM ORDENES_TRABAJO o
-            JOIN VEHICULOS v ON o.id_vehiculo = v.id_vehiculo
-            JOIN EMPLEADOS e ON o.id_empleado = e.id_empleado
-            JOIN CLIENTES c ON v.id_cliente = c.id_cliente
-            ORDER BY o.id_orden DESC
+            SELECT id_orden, id_vehiculo, id_empleado, fecha_ingreso,
+                   fecha_entrega, estado, placa, nombre_empleado, nombre_cliente
+            FROM VW_ORDENES_TRABAJO
+            ORDER BY id_orden DESC
         """)
         result = self._rows_to_dicts(cursor)
         cursor.close()
@@ -301,7 +295,7 @@ class OracleDB:
     def get_all_repuestos(self) -> List[Dict]:
         conn = self._get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id_pieza, codigo, nombre, stock, precio_venta, proveedor FROM INVENTARIO_REPUESTOS ORDER BY nombre")
+        cursor.execute("SELECT id_pieza, codigo, nombre, stock, precio_venta, proveedor, estado_stock FROM VW_INVENTARIO_REPUESTOS ORDER BY nombre")
         result = self._rows_to_dicts(cursor)
         cursor.close()
         conn.close()
@@ -397,13 +391,10 @@ class OracleDB:
         conn = self._get_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT f.id_factura, f.id_orden, f.fecha, f.total, f.metodo_pago, f.estado_pago,
-                   c.nombre AS nombre_cliente, v.placa
-            FROM FACTURAS f
-            JOIN ORDENES_TRABAJO o ON f.id_orden = o.id_orden
-            JOIN VEHICULOS v ON o.id_vehiculo = v.id_vehiculo
-            JOIN CLIENTES c ON v.id_cliente = c.id_cliente
-            ORDER BY f.id_factura DESC
+            SELECT id_factura, id_orden, fecha, total, metodo_pago, estado_pago,
+                   nombre_cliente, placa
+            FROM VW_FACTURAS
+            ORDER BY id_factura DESC
         """)
         result = self._rows_to_dicts(cursor)
         cursor.close()
@@ -619,6 +610,19 @@ class MongoDB:
     def get_historial_by_vehiculo(self, id_vehiculo: int) -> Optional[Dict]:
         return self._remove_id_single(self.historial.find_one({"idVehiculo": id_vehiculo}))
 
+    def create_historial(self, id_vehiculo: int, kilometraje_ingreso: int,
+                         fecha_servicio: str, estado_final: str,
+                         diagnosticos_asociados: list = None) -> Dict:
+        nuevo = {
+            "idVehiculo": id_vehiculo,
+            "kilometraje_ingreso": kilometraje_ingreso,
+            "fecha_servicio": fecha_servicio,
+            "diagnosticos_asociados": diagnosticos_asociados or [],
+            "estado_final": estado_final,
+        }
+        self.historial.insert_one(nuevo)
+        return self._remove_id_single(nuevo)
+
     # ── COTIZACIONES ──────────────────────────────────────────────────
     def get_all_cotizaciones(self) -> List[Dict]:
         return self._remove_id(list(self.cotizaciones.find()))
@@ -626,12 +630,48 @@ class MongoDB:
     def get_cotizacion(self, codigo: str) -> Optional[Dict]:
         return self._remove_id_single(self.cotizaciones.find_one({"codigoCotizacion": codigo}))
 
+    def create_cotizacion(self, codigo: str, id_cliente: int, id_vehiculo: int,
+                          fecha_validez: str, servicios: list, total: float) -> Dict:
+        nuevo = {
+            "codigoCotizacion": codigo,
+            "idCliente": id_cliente,
+            "idVehiculo": id_vehiculo,
+            "fecha_validez": fecha_validez,
+            "servicios_repuestos": servicios,
+            "total": total,
+        }
+        self.cotizaciones.insert_one(nuevo)
+        return self._remove_id_single(nuevo)
+
     # ── PROVEEDORES ───────────────────────────────────────────────────
     def get_all_proveedores(self) -> List[Dict]:
         return self._remove_id(list(self.proveedores.find()))
 
     def get_proveedor(self, codigo: str) -> Optional[Dict]:
         return self._remove_id_single(self.proveedores.find_one({"codigoProveedor": codigo}))
+
+    def create_proveedor(self, codigo: str, nombre_empresa: str, lineas_productos: list,
+                         telefono: str, email: str) -> Dict:
+        nuevo = {
+            "codigoProveedor": codigo,
+            "nombreEmpresa": nombre_empresa,
+            "lineas_productos": lineas_productos,
+            "contacto": {"telefono": telefono, "email": email},
+        }
+        self.proveedores.insert_one(nuevo)
+        return self._remove_id_single(nuevo)
+
+    def update_proveedor(self, codigo: str, nombre_empresa: str, lineas_productos: list,
+                         telefono: str, email: str) -> bool:
+        result = self.proveedores.update_one(
+            {"codigoProveedor": codigo},
+            {"$set": {
+                "nombreEmpresa": nombre_empresa,
+                "lineas_productos": lineas_productos,
+                "contacto": {"telefono": telefono, "email": email},
+            }}
+        )
+        return result.modified_count > 0
 
     # ── LOG DE ACTIVIDAD ──────────────────────────────────────────────
     def registrar_log(self, id_empleado: int, accion: str, modulo: str, resultado: str) -> None:

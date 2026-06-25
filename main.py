@@ -61,9 +61,14 @@ from controllers.bitacora_ctrl import (
 )
 from controllers.reportes_ctrl import ctrl_reportes_list, ctrl_reportes_detalle
 
-from controllers.historial_ctrl import ctrl_historial_list
-from controllers.cotizaciones_ctrl import ctrl_cotizaciones_list
-from controllers.proveedores_ctrl import ctrl_proveedores_list
+from controllers.historial_ctrl import ctrl_historial_list, ctrl_historial_nuevo, ctrl_historial_crear
+from controllers.cotizaciones_ctrl import (
+    ctrl_cotizaciones_list, ctrl_cotizaciones_nueva, ctrl_cotizaciones_crear, ctrl_cotizaciones_detalle
+)
+from controllers.proveedores_ctrl import (
+    ctrl_proveedores_list, ctrl_proveedores_nuevo, ctrl_proveedores_crear,
+    ctrl_proveedores_editar, ctrl_proveedores_actualizar
+)
 
 load_dotenv()
 
@@ -564,10 +569,11 @@ def get(req):
     return ctrl_bitacora_nueva(req)
 
 @rt("/bitacora/crear")
-def post(req, id_orden: int, mecanico: str, sintomas: str,
-         codigos_obd: str, hallazgos: str, mano_de_obra: float):
+def post(req, id_vehiculo: int, id_empleado: int, codigo_especificacion: str,
+         sintomas: str, codigos_obd: str = "", observaciones: str = ""):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return ctrl_bitacora_crear(req, id_orden, mecanico, sintomas, codigos_obd, hallazgos, mano_de_obra)
+    return ctrl_bitacora_crear(req, id_vehiculo, id_empleado, codigo_especificacion,
+                               sintomas, codigos_obd, observaciones)
 
 @rt("/bitacora/{id_orden}")
 def get(req, id_orden: int):
@@ -591,20 +597,69 @@ def get(req):
 # ═══════════════════════════════════════════════════════════════════════
 # HISTORIAL, COTIZACIONES, PROVEEDORES (MongoDB)
 # ═══════════════════════════════════════════════════════════════════════
+
+# Historial
 @rt("/historial")
 def get(req):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
     return ctrl_historial_list(req)
 
+@rt("/historial/nuevo")
+def get(req):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return ctrl_historial_nuevo(req)
+
+@rt("/historial/crear")
+def post(req, id_vehiculo: int, kilometraje_ingreso: int, fecha_servicio: str, estado_final: str):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return ctrl_historial_crear(req, id_vehiculo, kilometraje_ingreso, fecha_servicio, estado_final)
+
+# Cotizaciones
 @rt("/cotizaciones")
 def get(req):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
     return ctrl_cotizaciones_list(req)
 
+@rt("/cotizaciones/nueva")
+def get(req):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return ctrl_cotizaciones_nueva(req)
+
+@rt("/cotizaciones/crear")
+def post(req, id_cliente: int, id_vehiculo: int, fecha_validez: str, items_json: str, total: float):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return ctrl_cotizaciones_crear(req, id_cliente, id_vehiculo, fecha_validez, items_json, total)
+
+@rt("/cotizaciones/{codigo}")
+def get(req, codigo: str):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return ctrl_cotizaciones_detalle(req, codigo)
+
+# Proveedores
 @rt("/proveedores")
 def get(req):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
     return ctrl_proveedores_list(req)
+
+@rt("/proveedores/nuevo")
+def get(req):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return ctrl_proveedores_nuevo(req)
+
+@rt("/proveedores/crear")
+def post(req, codigo: str, nombre_empresa: str, lineas_raw: str, telefono: str, email: str):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return ctrl_proveedores_crear(req, codigo, nombre_empresa, lineas_raw, telefono, email)
+
+@rt("/proveedores/{codigo}/editar")
+def get(req, codigo: str):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return ctrl_proveedores_editar(req, codigo)
+
+@rt("/proveedores/actualizar")
+def post(req, codigo: str, nombre_empresa: str, lineas_raw: str, telefono: str, email: str):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return ctrl_proveedores_actualizar(req, codigo, nombre_empresa, lineas_raw, telefono, email)
 
 
 # ═══════════════════════════════════════════════════════════════════════

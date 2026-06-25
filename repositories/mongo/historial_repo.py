@@ -15,3 +15,11 @@ class HistorialRepository:
 
     def get_by_vehiculo(self, id_vehiculo: int) -> Optional[Dict]:
         return self._db.get_historial_by_vehiculo(id_vehiculo)
+
+    def create(self, id_vehiculo: int, kilometraje_ingreso: int,
+               fecha_servicio: str, estado_final: str,
+               diagnosticos_asociados: list = None) -> Dict:
+        return self._db.create_historial(
+            id_vehiculo, kilometraje_ingreso, fecha_servicio,
+            estado_final, diagnosticos_asociados
+        )

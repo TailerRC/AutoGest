@@ -15,3 +15,11 @@ class ProveedoresRepository:
 
     def get_by_codigo(self, codigo: str) -> Optional[Dict]:
         return self._db.get_proveedor(codigo)
+
+    def create(self, codigo: str, nombre_empresa: str, lineas_productos: list,
+               telefono: str, email: str) -> Dict:
+        return self._db.create_proveedor(codigo, nombre_empresa, lineas_productos, telefono, email)
+
+    def update(self, codigo: str, nombre_empresa: str, lineas_productos: list,
+               telefono: str, email: str) -> bool:
+        return self._db.update_proveedor(codigo, nombre_empresa, lineas_productos, telefono, email)

@@ -15,3 +15,9 @@ class CotizacionesRepository:
 
     def get_by_codigo(self, codigo: str) -> Optional[Dict]:
         return self._db.get_cotizacion(codigo)
+
+    def create(self, codigo: str, id_cliente: int, id_vehiculo: int,
+               fecha_validez: str, servicios: list, total: float) -> Dict:
+        return self._db.create_cotizacion(
+            codigo, id_cliente, id_vehiculo, fecha_validez, servicios, total
+        )

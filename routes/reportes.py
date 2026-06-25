@@ -147,7 +147,7 @@ def render_reportes_detalle(req, datos):
     # ── Bloque MongoDB — Bitácora ─────────────────────────────────────
     if bitacora:
         sintomas = bitacora.get("sintomas", [])
-        codigos = bitacora.get("codigos_obd", [])
+        codigos = bitacora.get("codigo_OBD", [])
         seccion_mongo_bit = Div(
             Div(
                 H2("📝 Bitácora de Diagnóstico"),

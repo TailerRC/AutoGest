@@ -18,6 +18,14 @@ def ctrl_bitacora_list(req):
         from routes.helpers import no_perm
         return no_perm(req)
     bitacoras = deps.bitacora.listar()
+    empleados = deps.empleados.listar()
+    vehiculos = deps.vehiculos.listar()
+    # Resolver nombre empleado y vehículo desde Oracle
+    for b in bitacoras:
+        emp = next((e for e in empleados if e["id_empleado"] == b.get("idEmpleado")), None)
+        b["nombre_empleado"] = emp["nombre"] if emp else f"Empleado #{b.get('idEmpleado','?')}"
+        veh = next((v for v in vehiculos if v["id_vehiculo"] == b.get("idVehiculo")), None)
+        b["placa_vehiculo"] = veh["placa"] if veh else f"Vehículo #{b.get('idVehiculo','?')}"
     return render_bitacora_list(req, usuario, bitacoras)
 
 def ctrl_bitacora_nueva(req):
@@ -26,7 +34,8 @@ def ctrl_bitacora_nueva(req):
         from routes.helpers import no_perm
         return no_perm(req)
     vehiculos = deps.vehiculos.listar()
-    return render_bitacora_nueva(req, vehiculos)
+    empleados = deps.empleados.listar()
+    return render_bitacora_nueva(req, vehiculos, empleados)
 
 def ctrl_bitacora_crear(req, id_vehiculo: int, id_empleado: int, codigo_especificacion: str,
                         sintomas: str, codigos_obd: str, observaciones: str):

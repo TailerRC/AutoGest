@@ -23,8 +23,8 @@ def render_bitacora_list(req, usuario, bitacoras):
         id_vehiculo = b.get("idVehiculo", "?")
 
         filas.append(Tr(
-            Td(f"Vehículo #{id_vehiculo}", cls="font-mono text-sm"),
-            Td(str(b.get("idEmpleado", "—"))),
+            Td(Span(b.get("placa_vehiculo", f"#{id_vehiculo}"), cls="badge badge-gray font-mono")),
+            Td(b.get("nombre_empleado", "—")),
             Td(sintomas_tags),
             Td(codigos_tags),
             Td(A("👁️ Ver", href=f"/bitacora/{id_vehiculo}", cls="btn btn-sm btn-secondary")),
@@ -35,7 +35,7 @@ def render_bitacora_list(req, usuario, bitacoras):
 
     tabla = Div(
         Table(
-            Thead(Tr(Th("Vehículo"), Th("ID Empleado"), Th("Síntomas"), Th("Códigos OBD"), Th("Acciones"))),
+            Thead(Tr(Th("Vehículo"), Th("Mecánico"), Th("Síntomas"), Th("Códigos OBD"), Th("Acciones"))),
             Tbody(*filas) if filas else Tbody(Tr(Td("Sin bitácoras.", colspan="5", cls="no-data"))),
         ),
         cls="table-wrap"
@@ -118,12 +118,15 @@ def render_bitacora_detalle(req, bitacora, vehiculo):
     return layout(req, f"Bitácora #{id_vehiculo}", f"📝 Bitácora de Diagnóstico #{id_vehiculo}", "", contenido)
 
 
-def render_bitacora_nueva(req, vehiculos):
+def render_bitacora_nueva(req, vehiculos, empleados):
     """Renderiza el formulario de nueva bitácora."""
     error = req.query_params.get("error", "")
     alert = Div(f"❌ {error}", cls="alert alert-error") if error else ""
 
-    opts_v = [Option(f"Vehículo #{v['id_vehiculo']} — {v.get('marca','?')} {v.get('modelo','')} / {v.get('placa','')}", value=str(v["id_vehiculo"])) for v in vehiculos]
+    opts_v = [Option(f"#{v['id_vehiculo']} — {v.get('marca','?')} {v.get('modelo','')} / {v.get('placa','')}",
+                     value=str(v["id_vehiculo"])) for v in vehiculos]
+    opts_e = [Option(f"{e['nombre']} ({e['cargo']})",
+                     value=str(e["id_empleado"])) for e in empleados]
 
     form = Form(
         alert,
@@ -131,8 +134,8 @@ def render_bitacora_nueva(req, vehiculos):
             Div(Label("Vehículo"),
                 Select(Option("-- Seleccionar --", value=""), *opts_v, name="id_vehiculo", required=True),
                 cls="form-group"),
-            Div(Label("ID Empleado responsable"),
-                Input(name="id_empleado", type="number", placeholder="1", required=True),
+            Div(Label("Mecánico responsable"),
+                Select(Option("-- Seleccionar --", value=""), *opts_e, name="id_empleado", required=True),
                 cls="form-group"),
             Div(Label("Código Especificación"),
                 Input(name="codigo_especificacion", placeholder="ESP-TOY-001", required=True),
