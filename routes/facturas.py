@@ -44,7 +44,6 @@ def render_facturas_list(req, usuario, facturas):
             )
         filas.append(Tr(
             Td(f"#{f.get('id_factura', '—')}", cls="font-mono text-muted text-sm"),
-            Td(A(f"Ord. #{f.get('id_orden', '')}", href=f"/ordenes/{f.get('id_orden', '')}", cls="link") if f.get("id_orden") else "—"),
             Td(f.get("nombre_cliente", "—")),
             Td(Span(f.get("placa", "—"), cls="badge badge-gray font-mono")),
             Td(f.get("fecha", "—")),
@@ -59,8 +58,8 @@ def render_facturas_list(req, usuario, facturas):
 
     tabla = Div(
         Table(
-            Thead(Tr(Th("N° Factura"), Th("Orden"), Th("Cliente"), Th("Placa"), Th("Fecha"), Th("Total"), Th("Método"), Th("Estado"), Th("Acciones"))),
-            Tbody(*filas) if filas else Tbody(Tr(Td("Sin facturas.", colspan="9", cls="no-data"))),
+            Thead(Tr(Th("N° Factura"), Th("Cliente"), Th("Placa"), Th("Fecha"), Th("Total"), Th("Método"), Th("Estado"), Th("Acciones"))),
+            Tbody(*filas) if filas else Tbody(Tr(Td("Sin facturas.", colspan="8", cls="no-data"))),
         ),
         cls="table-wrap"
     )

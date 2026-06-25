@@ -391,7 +391,7 @@ class OracleDB:
         conn = self._get_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id_factura, NULL AS id_orden, fecha, total, metodo_pago, estado_pago,
+            SELECT id_factura, fecha, total, metodo_pago, estado_pago,
                    cliente AS nombre_cliente, placa
             FROM VW_FACTURAS
             ORDER BY id_factura DESC
@@ -545,7 +545,7 @@ class MongoDB:
         
         self.catalogo = self.db["catalogo_especificaciones_tecnicas"]
         self.bitacora = self.db["bitacora_diagnostico"]
-        self.historial = self.db["historial_mantenimiento"]
+        self.historial = self.db["historial_mantenimiento_vehiculo"]
         self.cotizaciones = self.db["cotizaciones"]
         self.proveedores = self.db["proveedores"]
         self.alertas = self.db["alertas_sistema"]
