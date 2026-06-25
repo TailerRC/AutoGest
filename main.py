@@ -21,6 +21,9 @@ from auth import login, puede_acceder, registrar_accion
 from database import get_oracle_connection, get_mongo_connection
 import os
 from dotenv import load_dotenv
+from starlette.datastructures import UploadFile
+
+FOTOS_PATH = os.getenv("FOTOS_VEHICULOS_PATH", "fotos_vehiculos")
 
 # ── Importar helpers ──────────────────────────────────────────────────
 from routes.helpers import layout, login_layout, no_perm, badge_estado
@@ -36,7 +39,7 @@ from controllers.vehiculos_ctrl import (
 )
 from controllers.empleados_ctrl import (
     ctrl_empleados_list, ctrl_empleados_nuevo, ctrl_empleados_crear,
-    ctrl_empleados_editar, ctrl_empleados_actualizar,
+    ctrl_empleados_editar, ctrl_empleados_actualizar, ctrl_empleados_eliminar,
 )
 from controllers.ordenes_ctrl import (
     ctrl_ordenes_list, ctrl_ordenes_detalle, ctrl_ordenes_nueva, ctrl_ordenes_crear,
@@ -373,6 +376,48 @@ def post(req, id_vehiculo: int):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
     return ctrl_vehiculos_eliminar(req, id_vehiculo)
 
+@rt("/vehiculos/{id_vehiculo}/fotos")
+async def post(req, id_vehiculo: int):
+    if not require_login(req):
+        return RedirectResponse("/login", status_code=303)
+
+    form     = await req.form()
+    placa    = form.get("placa", "").upper().strip()
+    frontal  = form.get("foto_frontal")
+    lateral  = form.get("foto_lateral")
+    angular  = form.get("foto_angular")
+
+    archivos = {
+        "FRONTAL": frontal,
+        "LATERAL": lateral,
+        "ANGULAR": angular,
+    }
+
+    # Validar que las 3 estén presentes
+    for vista, archivo in archivos.items():
+        if not archivo or not getattr(archivo, "filename", None):
+            return RedirectResponse(
+                f"/vehiculos/{id_vehiculo}/editar?error=Debes+subir+las+3+fotos+({vista}+falta)",
+                status_code=303
+            )
+
+    # Crear carpeta {PLACA}_FOTOS dentro de la ruta general
+    carpeta = os.path.join(FOTOS_PATH, f"{placa}_FOTOS")
+    os.makedirs(carpeta, exist_ok=True)
+
+    # Guardar cada foto
+    for vista, archivo in archivos.items():
+        ext     = os.path.splitext(archivo.filename)[1].lower() or ".jpg"
+        nombre  = f"{placa}_{vista}{ext}"
+        destino = os.path.join(carpeta, nombre)
+        contenido = await archivo.read()
+        with open(destino, "wb") as f:
+            f.write(contenido)
+
+    return RedirectResponse(
+        f"/vehiculos/{id_vehiculo}/editar?msg=fotos_ok",
+        status_code=303
+    )
 
 # ═══════════════════════════════════════════════════════════════════════
 # EMPLEADOS
@@ -402,6 +447,10 @@ def post(req, id_empleado: int, nombre: str, cargo: str, especialidad: str):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
     return ctrl_empleados_actualizar(req, id_empleado, nombre, cargo, especialidad)
 
+@rt("/empleados/eliminar")
+def post(req, id_empleado: int):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return ctrl_empleados_eliminar(req, id_empleado)
 
 # ═══════════════════════════════════════════════════════════════════════
 # ÓRDENES DE TRABAJO

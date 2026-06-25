@@ -55,3 +55,8 @@ class EmpleadoRepository:
         TODO: UPDATE EMPLEADOS SET nombre=:1,cargo=:2,especialidad=:3 WHERE id_empleado=:4
         """
         return self._db.update_empleado(id_empleado, nombre, cargo, especialidad)
+    def delete(self, id_empleado: int) -> bool:
+        """
+        TODO: DELETE FROM EMPLEADOS WHERE id_empleado = :1
+        """
+        return self._db.delete_empleado(id_empleado)

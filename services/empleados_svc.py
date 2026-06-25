@@ -36,3 +36,7 @@ class EmpleadoService:
             return False
         return self._repo.update(id_empleado, nombre.strip(),
                                   cargo.strip(), especialidad.strip())
+    def eliminar(self, id_empleado: int) -> bool:
+        if not self._repo.get_by_id(id_empleado):
+            return False
+        return self._repo.delete(id_empleado)

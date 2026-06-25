@@ -20,8 +20,18 @@ def ctrl_clientes_list(req):
     if not puede_acceder(usuario, "clientes", "ver"):
         from routes.helpers import no_perm
         return no_perm(req)
-    clientes = deps.clientes.listar()
-    return render_clientes_list(req, usuario, clientes)
+    
+    page     = int(req.query_params.get("page", 1))
+    per_page = int(req.query_params.get("per_page", 10))
+    if per_page not in (10, 15, 20): per_page = 10
+    if page < 1: page = 1
+
+    todos    = deps.clientes.listar()
+    total    = len(todos)
+    inicio   = (page - 1) * per_page
+    clientes = todos[inicio : inicio + per_page]
+
+    return render_clientes_list(req, usuario, clientes, total, page, per_page)
 
 
 def ctrl_clientes_nuevo(req):
@@ -72,6 +82,11 @@ def ctrl_clientes_eliminar(req, id_cliente: int):
     if not puede_acceder(usuario, "clientes", "eliminar"):
         from routes.helpers import no_perm
         return no_perm(req)
-    deps.clientes.eliminar(id_cliente)
-    registrar_accion(usuario, "ELIMINAR", "clientes")
-    return RedirectResponse("/clientes?msg=eliminado", status_code=303)
+    try:
+        deps.clientes.eliminar(id_cliente)
+        registrar_accion(usuario, "ELIMINAR", "clientes")
+        return RedirectResponse("/clientes?msg=eliminado", status_code=303)
+    except Exception as e:
+        if "ORA-02292" in str(e):
+            return RedirectResponse("/clientes?msg=con_vehiculos", status_code=303)
+        return RedirectResponse("/clientes?msg=error", status_code=303)

@@ -18,9 +18,18 @@ def ctrl_empleados_list(req):
     if not puede_acceder(usuario, "empleados", "ver"):
         from routes.helpers import no_perm
         return no_perm(req)
-    empleados = deps.empleados.listar()
-    return render_empleados_list(req, usuario, empleados)
 
+    page     = int(req.query_params.get("page", 1))
+    per_page = int(req.query_params.get("per_page", 10))
+    if per_page not in (10, 15, 20): per_page = 10
+    if page < 1: page = 1
+
+    todos     = deps.empleados.listar()
+    total     = len(todos)
+    inicio    = (page - 1) * per_page
+    empleados = todos[inicio : inicio + per_page]
+
+    return render_empleados_list(req, usuario, empleados, total, page, per_page)
 
 def ctrl_empleados_nuevo(req):
     usuario = req.session.get("usuario")
@@ -63,3 +72,17 @@ def ctrl_empleados_actualizar(req, id_empleado: int,
     deps.empleados.actualizar(id_empleado, nombre, cargo, especialidad)
     registrar_accion(usuario, "EDITAR", "empleados")
     return RedirectResponse("/empleados?msg=editado", status_code=303)
+
+def ctrl_empleados_eliminar(req, id_empleado: int):
+    usuario = req.session.get("usuario")
+    if not puede_acceder(usuario, "empleados", "eliminar"):
+        from routes.helpers import no_perm
+        return no_perm(req)
+    try:
+        deps.empleados.eliminar(id_empleado)
+        registrar_accion(usuario, "ELIMINAR", "empleados")
+        return RedirectResponse("/empleados?msg=eliminado", status_code=303)
+    except Exception as e:
+        if "ORA-02292" in str(e):
+            return RedirectResponse("/empleados?msg=con_ordenes", status_code=303)
+        return RedirectResponse("/empleados?msg=error", status_code=303)

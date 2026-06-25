@@ -18,9 +18,19 @@ def ctrl_vehiculos_list(req):
     if not puede_acceder(usuario, "vehiculos", "ver"):
         from routes.helpers import no_perm
         return no_perm(req)
-    vehiculos = deps.vehiculos.listar()
+
+    page     = int(req.query_params.get("page", 1))
+    per_page = int(req.query_params.get("per_page", 10))
+    if per_page not in (10, 15, 20): per_page = 10
+    if page < 1: page = 1
+
+    todos     = deps.vehiculos.listar()
     clientes  = deps.clientes.listar()
-    return render_vehiculos_list(req, usuario, vehiculos, clientes)
+    total     = len(todos)
+    inicio    = (page - 1) * per_page
+    vehiculos = todos[inicio : inicio + per_page]
+
+    return render_vehiculos_list(req, usuario, vehiculos, clientes, total, page, per_page)
 
 
 def ctrl_vehiculos_nuevo(req):
@@ -74,6 +84,11 @@ def ctrl_vehiculos_eliminar(req, id_vehiculo: int):
     if not puede_acceder(usuario, "vehiculos", "eliminar"):
         from routes.helpers import no_perm
         return no_perm(req)
-    deps.vehiculos.eliminar(id_vehiculo)
-    registrar_accion(usuario, "ELIMINAR", "vehiculos")
-    return RedirectResponse("/vehiculos?msg=eliminado", status_code=303)
+    try:
+        deps.vehiculos.eliminar(id_vehiculo)
+        registrar_accion(usuario, "ELIMINAR", "vehiculos")
+        return RedirectResponse("/vehiculos?msg=eliminado", status_code=303)
+    except Exception as e:
+        if "ORA-02292" in str(e):
+            return RedirectResponse("/vehiculos?msg=con_ordenes", status_code=303)
+        return RedirectResponse("/vehiculos?msg=error", status_code=303)

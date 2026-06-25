@@ -207,7 +207,17 @@ class OracleDB:
         cursor.close()
         conn.close()
         return actualizado
-
+    
+    def delete_empleado(self, id_empleado: int) -> bool:
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM EMPLEADOS WHERE id_empleado = :1", [id_empleado])
+        eliminado = cursor.rowcount > 0
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return eliminado
+    
     def get_reporte_mecanicos(self) -> List[Dict]:
         conn = self._get_connection()
         cursor = conn.cursor()
