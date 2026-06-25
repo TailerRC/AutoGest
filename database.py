@@ -35,7 +35,11 @@ class OracleDB:
         self.dsn = os.getenv("ORACLE_DSN")
 
     def _get_connection(self):
-        return oracledb.connect(user=self.user, password=self.password, dsn=self.dsn)
+        conn = oracledb.connect(user=self.user, password=self.password, dsn=self.dsn)
+        cursor = conn.cursor()
+        cursor.execute("ALTER SESSION SET CURRENT_SCHEMA = APP_AUTOGEST")
+        cursor.close()
+        return conn
 
     @staticmethod
     def _rows_to_dicts(cursor) -> List[Dict]:
@@ -631,13 +635,19 @@ class MongoDB:
 
     # ── LOG DE ACTIVIDAD ──────────────────────────────────────────────
     def registrar_log(self, id_empleado: int, accion: str, modulo: str, resultado: str) -> None:
+        from bson import ObjectId
         log = {
-            "_id": str(uuid.uuid4()),
-            "id_empleado": id_empleado,
+            "_id": ObjectId(),
+            "idUsuario": id_empleado,
             "accion": accion,
-            "modulo": modulo,
-            "fecha_hora": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
-            "resultado": resultado
+            "entidad_afectada": modulo,
+            "id_registro_afectado": resultado,
+            "detalles": {
+                "modulo": modulo,
+                "resultado": resultado
+            },
+            "direccion_ip": "127.0.0.1",
+            "fecha_hora": datetime.utcnow()
         }
         self.logs.insert_one(log)
 
