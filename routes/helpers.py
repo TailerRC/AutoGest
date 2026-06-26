@@ -228,10 +228,10 @@ def badge_rol(rol: str):
 
 def badge_pago(metodo: str):
     mapa = {
-        "Efectivo":        "badge-green",
-        "Tarjeta Débito":  "badge-blue",
-        "Tarjeta Crédito": "badge-indigo",
-        "Transferencia":   "badge-cyan",
+        "Efectivo":              "badge-green",
+        "Tarjeta Débito":        "badge-blue",
+        "Tarjeta Crédito":       "badge-indigo",
+        "Billetera Electrónica": "badge-yellow",
     }
     css = mapa.get(metodo, "badge-gray")
     return Span(metodo, cls=f"badge {css}")
