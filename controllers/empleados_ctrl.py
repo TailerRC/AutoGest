@@ -21,15 +21,20 @@ def ctrl_empleados_list(req):
 
     page     = int(req.query_params.get("page", 1))
     per_page = int(req.query_params.get("per_page", 10))
+    buscar   = req.query_params.get("buscar", "").strip().lower()
     if per_page not in (10, 15, 20): per_page = 10
     if page < 1: page = 1
 
-    todos     = deps.empleados.listar()
+    todos = deps.empleados.listar()
+
+    if buscar:
+        todos = [e for e in todos if buscar in e["cargo"].lower()]
+
     total     = len(todos)
     inicio    = (page - 1) * per_page
     empleados = todos[inicio : inicio + per_page]
 
-    return render_empleados_list(req, usuario, empleados, total, page, per_page)
+    return render_empleados_list(req, usuario, empleados, total, page, per_page, buscar)
 
 def ctrl_empleados_nuevo(req):
     usuario = req.session.get("usuario")

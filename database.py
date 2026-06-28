@@ -719,11 +719,39 @@ class MongoDB:
         return self._remove_id(list(self.logs.find().sort("fecha_hora", -1).limit(limit)))
 
     # ── ALERTAS ───────────────────────────────────────────────────────
-    def get_alertas_activas(self, destinatario: str = None) -> List[Dict]:
+    def get_alertas_activas(self, destinatario: str = None, limit: int = 20) -> List[Dict]:
+        """Retorna las alertas más recientes, ordenadas por fecha descendente."""
         query = {}
         if destinatario:
             query["destinatario"] = destinatario
-        return self._remove_id(list(self.alertas.find(query)))
+        return self._remove_id(
+            list(self.alertas.find(query).sort("_id", -1).limit(limit))
+        )
+
+    def existe_alerta_similar(self, tipo_evento: str, clave_unica: str) -> bool:
+        """
+        Evita duplicar alertas: busca si ya existe una con el mismo
+        tipo_evento y la misma clave de negocio en detalle_notificacion.
+        """
+        return self.alertas.find_one({
+            "tipo_evento": tipo_evento,
+            "detalle_notificacion.clave": clave_unica
+        }) is not None
+
+    def crear_alerta(self, codigo: str, tipo_evento: str, detalle_notificacion: dict) -> Dict:
+        """Inserta una nueva alerta en alertas_sistema."""
+        nueva = {
+            "codigoAlerta": codigo,
+            "tipo_evento": tipo_evento,
+            "detalle_notificacion": detalle_notificacion,
+        }
+        self.alertas.insert_one(nueva)
+        return self._remove_id_single(nueva)
+
+    def siguiente_codigo_alerta(self) -> str:
+        """Genera el siguiente código secuencial tipo ALER-001, ALER-002, ..."""
+        total = self.alertas.count_documents({})
+        return f"ALER-{total + 1:03d}"
 
 
 # ═══════════════════════════════════════════════════════════════════════

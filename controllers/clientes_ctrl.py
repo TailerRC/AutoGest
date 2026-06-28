@@ -53,6 +53,11 @@ def ctrl_clientes_crear(req, nombre: str, dni: str, telefono: str, email: str):
         return RedirectResponse("/clientes?msg=creado", status_code=303)
     except ValueError as e:
         return RedirectResponse(f"/clientes/nuevo?error={str(e)}", status_code=303)
+    except Exception as e:
+        if "ORA-00001" in str(e):
+            msg = "Ya existe un cliente registrado con ese DNI o correo electrónico."
+            return RedirectResponse(f"/clientes/nuevo?error={msg}", status_code=303)
+        return RedirectResponse("/clientes/nuevo?error=Ocurrió un error inesperado.", status_code=303)
 
 
 def ctrl_clientes_editar(req, id_cliente: int):
@@ -72,10 +77,15 @@ def ctrl_clientes_actualizar(req, id_cliente: int, nombre: str,
     if not puede_acceder(usuario, "clientes", "editar"):
         from routes.helpers import no_perm
         return no_perm(req)
-    deps.clientes.actualizar(id_cliente, nombre, dni, telefono, email)
-    registrar_accion(usuario, "EDITAR", "clientes")
-    return RedirectResponse("/clientes?msg=editado", status_code=303)
-
+    try:
+        deps.clientes.actualizar(id_cliente, nombre, dni, telefono, email)
+        registrar_accion(usuario, "EDITAR", "clientes")
+        return RedirectResponse("/clientes?msg=editado", status_code=303)
+    except Exception as e:
+        if "ORA-00001" in str(e):
+            msg = "Ya existe otro cliente registrado con ese DNI o correo electrónico."
+            return RedirectResponse(f"/clientes/{id_cliente}/editar?error={msg}", status_code=303)
+        return RedirectResponse(f"/clientes/{id_cliente}/editar?error=Ocurrió un error inesperado.", status_code=303)
 
 def ctrl_clientes_eliminar(req, id_cliente: int):
     usuario = req.session.get("usuario")

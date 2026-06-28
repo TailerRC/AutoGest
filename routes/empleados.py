@@ -26,7 +26,7 @@ CARGOS = [
 ]
 
 
-def render_empleados_list(req, usuario, empleados, total, page, per_page):
+def render_empleados_list(req, usuario, empleados, total, page, per_page, buscar=""):
     """Renderiza la lista de empleados."""
     msg = req.query_params.get("msg", "")
     alert_map = {
@@ -68,7 +68,8 @@ def render_empleados_list(req, usuario, empleados, total, page, per_page):
         pp = pp or per_page
         msg_actual = req.query_params.get("msg", "")
         m = f"&msg={msg_actual}" if msg_actual else ""
-        return f"/empleados?page={p}&per_page={pp}{m}"
+        b = f"&buscar={buscar}" if buscar else ""
+        return f"/empleados?page={p}&per_page={pp}{m}{b}"
 
     selector_pp = Div(
         Span("Mostrar", cls="text-muted text-sm"),
@@ -167,19 +168,20 @@ def render_empleados_list(req, usuario, empleados, total, page, per_page):
         filas.append(Tr(
             Td(id_badge, cls="td-empleado-id"),
             Td(e["nombre"]),
-            Td(  # Cargo — texto con icono, sin badge
+            Td(
                 Div(
                     I(cls=f"fa-solid {_cargo_icon(e['cargo'])} cargo-icon"),
                     Span(e["cargo"], cls="cargo-texto"),
                     cls="cargo-cell"
                 )
             ),
-            Td(  # Especialidad — badge solo si hay valor
+            Td(
                 Span(e["especialidad"], cls="badge badge-blue")
                 if e.get("especialidad") and e["especialidad"].strip()
                 else Span("—", cls="text-muted text-sm")
             ),
             Td(Div(*acciones, cls="row-actions") if acciones else "—"),
+            data_cargo=e["cargo"],
         ))
 
     tabla = Div(
@@ -194,6 +196,7 @@ def render_empleados_list(req, usuario, empleados, total, page, per_page):
             Tbody(*filas) if filas else Tbody(
                 Tr(Td("No hay empleados registrados.", colspan="5", cls="no-data"))
             ),
+            id="tabla-empleados",
         ),
         cls="table-wrap"
     )
@@ -202,6 +205,22 @@ def render_empleados_list(req, usuario, empleados, total, page, per_page):
         I(cls="fa-solid fa-plus"), " Nuevo Empleado",
         href="/empleados/nuevo", cls="btn btn-primary"
     ) if puede_acceder(usuario, "empleados", "crear") else ""
+
+    btn_filtro = Form(
+        I(cls="fa-solid fa-magnifying-glass", style="position:absolute;left:.7rem;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:.8rem;"),
+        Input(
+            type="text",
+            name="buscar",
+            id="input-filtro-cargo",
+            placeholder="Buscar por cargo...",
+            value=buscar,
+            oninput="debounceFiltro(this.value)",
+            style="padding:.45rem .75rem .45rem 2rem;border:1px solid var(--border);border-radius:8px;font-size:.85rem;width:220px;"
+        ),
+        Input(type="hidden", name="per_page", value=str(per_page)),
+        method="get", action="/empleados",
+        style="position:relative;display:inline-block;"
+    )
 
     contenido = Div(
         Style("""
@@ -264,6 +283,18 @@ def render_empleados_list(req, usuario, empleados, total, page, per_page):
                 font-size: .85rem;
                 font-weight: 500;
                 color: var(--text-primary);
+            }  
+        """),
+        Script("""
+            let timeoutFiltro;
+            function debounceFiltro(valor) {
+                clearTimeout(timeoutFiltro);
+                timeoutFiltro = setTimeout(() => {
+                    const params = new URLSearchParams(window.location.search);
+                    params.set('buscar', valor);
+                    params.set('page', '1');
+                    window.location.search = params.toString();
+                }, 500);
             }
         """),
         alert,
@@ -272,7 +303,7 @@ def render_empleados_list(req, usuario, empleados, total, page, per_page):
             Div(
                 Div(
                     Span(f"{total} empleados", cls="text-muted text-sm"),  # ← total
-                    crear_btn,
+                    Div(btn_filtro, crear_btn, cls="flex gap-2", style="align-items:center;"),
                     cls="flex gap-2",
                     style="justify-content:space-between;align-items:center;margin-bottom:1rem;"
                 ),

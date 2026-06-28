@@ -272,6 +272,7 @@ def render_facturas_list(req, usuario, facturas):
                 color: var(--brand-secondary);
                 letter-spacing: .04em;
                 overflow: hidden;
+                white-space: nowrap; 
                 transition: background .2s, border-color .2s, color .2s, box-shadow .2s;
             }
             .factura-icon {
@@ -294,7 +295,7 @@ def render_facturas_list(req, usuario, facturas):
                 opacity: 1;
                 margin-right: .4rem;
             }
-            .td-factura-id { width: 100px; }
+            .td-factura-id { width: 110px; white-space: nowrap; }
             .fecha-cell {
                 font-size: .82rem;
                 font-family: monospace;

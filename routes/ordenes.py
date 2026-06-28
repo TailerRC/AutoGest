@@ -524,8 +524,24 @@ def render_ordenes_nueva(req, vehiculos, mecanicos):
     hoy    = date.today().strftime("%Y-%m-%d")
     opts_v = [Option(f"{v['placa']} — {v['marca']} {v['modelo']}",
                      value=str(v["id_vehiculo"])) for v in vehiculos]
-    opts_e = [Option(f"{e['nombre']} · {e.get('especialidad','—')}",
-                     value=str(e["id_empleado"])) for e in mecanicos]
+
+    # Especialidades únicas presentes entre los mecánicos, ordenadas
+    especialidades = sorted({
+        (m.get("especialidad") or "Sin especialidad").strip()
+        for m in mecanicos
+    })
+    opts_esp = [Option(esp, value=esp) for esp in especialidades]
+
+    # Opciones de mecánico, cada una etiquetada con su especialidad real
+    # (data-especialidad la usa el JS para filtrar sin recargar la página)
+    opts_e = [
+        Option(
+            e['nombre'],
+            value=str(e["id_empleado"]),
+            **{"data-especialidad": (e.get("especialidad") or "Sin especialidad").strip()}
+        )
+        for e in mecanicos
+    ]
 
     form = Form(
         Div(
@@ -533,15 +549,19 @@ def render_ordenes_nueva(req, vehiculos, mecanicos):
                 Select(Option("-- Seleccionar vehículo --", value=""),
                        *opts_v, name="id_vehiculo", required=True),
                 cls="form-group"),
+            Div(Label("Especialidad requerida"),
+                Select(Option("-- Todas las especialidades --", value=""),
+                       *opts_esp, id="select-especialidad"),
+                cls="form-group"),
             Div(Label("Mecánico asignado"),
                 Select(Option("-- Seleccionar mecánico --", value=""),
-                       *opts_e, name="id_empleado", required=True),
+                       *opts_e, name="id_empleado", id="select-mecanico", required=True),
                 cls="form-group"),
             Div(Label("Fecha de ingreso"),
-                Input(name="fecha_ingreso", type="date", value=hoy, required=True),
+                Input(name="fecha_ingreso", type="date", value=hoy, min=hoy, required=True),
                 cls="form-group"),
             Div(Label("Fecha estimada de entrega"),
-                Input(name="fecha_entrega", type="date", required=True),
+                Input(name="fecha_entrega", type="date", min=hoy, required=True),
                 cls="form-group"),
             cls="form-grid"
         ),
@@ -554,6 +574,35 @@ def render_ordenes_nueva(req, vehiculos, mecanicos):
         method="post", action="/ordenes/crear"
     )
 
+    filtro_js = Script("""
+        document.addEventListener('DOMContentLoaded', function () {
+            const selEsp = document.getElementById('select-especialidad');
+            const selMec = document.getElementById('select-mecanico');
+            if (!selEsp || !selMec) return;
+
+            const opcionesMecanico = Array.from(selMec.options);
+
+            selEsp.addEventListener('change', function () {
+                const esp = this.value;
+                let primeraVisible = null;
+
+                opcionesMecanico.forEach(function (opt) {
+                    if (!opt.value) return; // deja siempre visible el placeholder
+                    const coincide = !esp || opt.dataset.especialidad === esp;
+                    opt.hidden = !coincide;
+                    opt.disabled = !coincide;
+                    if (coincide && !primeraVisible) primeraVisible = opt;
+                });
+
+                // Si el mecánico seleccionado ya no coincide con la especialidad, resetea
+                const actual = selMec.options[selMec.selectedIndex];
+                if (actual && actual.value && actual.hidden) {
+                    selMec.value = "";
+                }
+            });
+        });
+    """)
+
     contenido = Div(
         Div(
             Div(
@@ -562,7 +611,7 @@ def render_ordenes_nueva(req, vehiculos, mecanicos):
                   href="/ordenes", cls="btn btn-secondary btn-sm"),
                 cls="card-header"
             ),
-            Div(form, cls="card-body"),
+            Div(form, filtro_js, cls="card-body"),
             cls="form-card fade-in"
         ),
         cls="page-body"
