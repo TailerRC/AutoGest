@@ -847,7 +847,7 @@ def get(req, id_usuario: int):
 
 @rt("/usuarios/actualizar")
 def post(req, id_usuario: int, id_empleado: int, username: str,
-         password: str, rol: str, estado: str):
+         password: str = None, rol: str = None, estado: str = None):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
     return ctrl_usuarios_actualizar(req, id_usuario, id_empleado, username, password, rol, estado)
 

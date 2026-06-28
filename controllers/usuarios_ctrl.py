@@ -55,22 +55,31 @@ def ctrl_usuarios_editar(req, id_usuario: int):
     if not u:
         return RedirectResponse("/usuarios", status_code=303)
     empleados = deps.empleados.listar()
-    return render_usuarios_editar(req, u, empleados)
+    return render_usuarios_editar(req, usuario, u, empleados)
 
 
-def ctrl_usuarios_actualizar(req, id_usuario: int, id_empleado: int,
-                              username: str, password: str, rol: str, estado: str):
+def ctrl_usuarios_actualizar(req, id_usuario: int, id_empleado: int, username: str,
+                              password: str = None, rol: str = None, estado: str = None):
     usuario = req.session.get("usuario")
     if not puede_acceder(usuario, "usuarios", "editar"):
         from routes.helpers import no_perm
         return no_perm(req)
+
+    u_actual = deps.usuarios.obtener(id_usuario)
+    es_yo = u_actual and (u_actual["username"] == usuario.get("username"))
+
     try:
-        deps.usuarios.actualizar(id_usuario, id_empleado, username, password, rol, estado)
+        if es_yo:
+            deps.usuarios.actualizar(
+                id_usuario, u_actual["id_empleado"], username,
+                None, u_actual["rol"], u_actual["estado"]
+            )
+        else:
+            deps.usuarios.actualizar(id_usuario, id_empleado, username, password, rol, estado)
         registrar_accion(usuario, "EDITAR", "usuarios")
         return RedirectResponse("/usuarios?msg=editado", status_code=303)
     except ValueError as e:
         return RedirectResponse(f"/usuarios/{id_usuario}/editar?error={str(e)}", status_code=303)
-
 
 def ctrl_usuarios_desactivar(req, id_usuario: int):
     usuario = req.session.get("usuario")
