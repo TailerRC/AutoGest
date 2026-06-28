@@ -42,7 +42,7 @@ from services.reportes_svc  import ReporteService
 from services.historial_svc import HistorialService
 from services.cotizaciones_svc import CotizacionesService
 from services.proveedores_svc import ProveedoresService
-
+from services.alertas_svc import AlertaService
 
 class _DependencyContainer:
     """Inicializa y expone todos los servicios listos para usar."""
@@ -87,6 +87,7 @@ class _DependencyContainer:
         self.historial = HistorialService(_his_repo, _veh_repo)
         self.cotizaciones = CotizacionesService(_cot_repo)
         self.proveedores  = ProveedoresService(_pro_repo)
+        self.alertas    = AlertaService(_log_repo, _ord_repo, _fac_repo, _rep_repo)
 
 
 # Singleton — se inicializa una sola vez al importar el paquete

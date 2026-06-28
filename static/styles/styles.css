@@ -343,7 +343,7 @@ a:hover { color: var(--brand-primary-dark); }
 .topbar {
   height: var(--topbar-h);
   background: var(--bg-topbar);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid black;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -351,6 +351,7 @@ a:hover { color: var(--brand-primary-dark); }
   position: sticky;
   top: 0; z-index: 50;
   box-shadow: var(--shadow-sm);
+  overflow: hidden;
 }
 
 /* Línea de acento en la parte inferior del topbar */
@@ -442,6 +443,121 @@ a:hover { color: var(--brand-primary-dark); }
   grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
   gap: 1rem;
   margin-bottom: 1.5rem;
+}
+
+/* ── Dashboard Charts Grid ────────────────────────────────────── */
+.dashboard-charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  align-items: stretch;
+}
+
+.dashboard-charts-grid .card {
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard-charts-grid .card-body {
+  padding: 1rem 1.25rem 1.25rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (max-width: 900px) {
+  .dashboard-charts-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Leyenda HTML personalizada para gráficos circulares ─────── */
+.chart-legend {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: .45rem .75rem;
+  margin-top: .85rem;
+  padding-top: .75rem;
+  border-top: 1px solid var(--border);
+}
+
+.chart-legend-item {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  font-size: .73rem;
+  color: var(--text-secondary);
+  overflow: hidden;
+}
+
+.chart-legend-item .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.chart-legend-item .legend-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chart-legend-item .legend-value {
+  font-weight: 700;
+  color: var(--text-primary);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* ── Panel con scroll interno (Alertas del Sistema, etc.) ───────── */
+.scroll-panel {
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: .35rem;
+}
+
+.scroll-panel::-webkit-scrollbar {
+  width: 6px;
+}
+.scroll-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-panel::-webkit-scrollbar-thumb {
+  background: var(--border-dark);
+  border-radius: 10px;
+}
+.scroll-panel::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* ── Dashboard Welcome Banner ─────────────────────────────────── */
+.dashboard-welcome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.1rem 1.5rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.dashboard-welcome h2 {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+.dashboard-welcome h2 i {
+  color: var(--brand-primary);
 }
 
 .stat-card {
@@ -721,7 +837,7 @@ textarea { resize: vertical; min-height: 80px; }
 }
 
 .alert-error   { background: var(--red-bg);     border-color: rgba(239,68,68,.25);   color: #991b1b; }
-.alert-success { background: var(--green-bg);   border-color: rgba(16,185,129,.25);  color: #064e3b; }
+.alert-success { background: var(--green-bg);   border-color: rgba(16,185,129,.25);  color: #064e3b; align-items: center; }
 .alert-warning { background: var(--yellow-bg);  border-color: rgba(245,158,11,.25);  color: #713f12; }
 .alert-info    { background: var(--brand-secondary-light); border-color: #c8d4db;    color: var(--brand-secondary); }
 
@@ -888,3 +1004,262 @@ textarea { resize: vertical; min-height: 80px; }
 .chart-accent-2 { color: var(--blue-500); }        /* Azul Tecnológico */
 .chart-accent-3 { color: var(--cyan); }            /* Cian Turquesa */
 .chart-accent-4 { color: var(--brand-primary); }   /* Rojo Borgoña */
+
+/* LINK CLIENTE STYLES */
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  font-size: .85rem;
+  transition: all .18s ease;
+  background: none;
+  position: relative;
+}
+
+.btn-icon i { pointer-events: none; }
+
+/* Variante editar — azul tecnológico */
+.btn-icon.icon-edit {
+  background: var(--blue-50);
+  color: var(--blue-600);
+  border-color: var(--blue-100);
+}
+.btn-icon.icon-edit:hover {
+  background: var(--blue-600);
+  color: #fff;
+  border-color: var(--blue-600);
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 4px 12px rgba(37,99,235,.30);
+}
+
+/* Variante eliminar — rojo de alerta (no el borgoña de marca, para diferenciar peligro real) */
+.btn-icon.icon-delete {
+  background: var(--red-bg);
+  color: var(--red);
+  border-color: rgba(239,68,68,.2);
+}
+.btn-icon.icon-delete:hover {
+  background: var(--red);
+  color: #fff;
+  border-color: var(--red);
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 4px 12px rgba(239,68,68,.35);
+}
+
+/* Variante ver/detalle — gris secundario, por si se necesita un tercer ícono */
+.btn-icon.icon-view {
+  background: var(--brand-secondary-light);
+  color: var(--brand-secondary);
+  border-color: #c8d4db;
+}
+.btn-icon.icon-view:hover {
+  background: var(--brand-secondary);
+  color: #fff;
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 4px 12px rgba(47,72,88,.30);
+}
+
+/* Contenedor de acciones en tabla */
+.row-actions {
+  display: flex;
+  gap: .4rem;
+  align-items: center;
+}
+
+/* ── Zebra rows + hover mejorado en tablas ───────────────────── */
+tbody tr:nth-child(even) {
+  background: #FBFCFE;
+}
+tbody tr:nth-child(even):hover,
+tbody tr:nth-child(odd):hover {
+  background: #2f485821;
+}
+tbody tr {
+  transition: background .15s ease;
+}
+
+/* ── Cards de formulario (Nuevo/Editar) con más presencia ────── */
+.form-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  transition: box-shadow .25s ease, transform .25s ease;
+}
+
+.form-card:hover {
+  box-shadow: var(--shadow-lg);
+}
+
+.form-card .card-header {
+  padding: 1.35rem 1.6rem;
+  background: linear-gradient(135deg, rgba(122,12,17,.04), rgba(47,72,88,.02));
+}
+
+.form-card .card-body {
+  padding: 1.75rem 1.6rem;
+}
+
+.form-card .form-grid {
+  gap: 1.4rem;
+}
+
+.form-card input,
+.form-card select,
+.form-card textarea {
+  padding: .7rem 1rem;
+  border-radius: 10px;
+  transition: border-color .2s, box-shadow .2s, transform .15s;
+}
+
+.form-card input:focus,
+.form-card select:focus,
+.form-card textarea:focus {
+  transform: translateY(-1px);
+}
+
+.form-card .form-group label {
+  margin-bottom: .1rem;
+}
+
+/* ── Modal de confirmación (eliminación) ─────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(30, 41, 59, .55);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s ease;
+}
+
+.modal-overlay.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.modal-box {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  width: 100%;
+  max-width: 400px;
+  margin: 0 1rem;
+  padding: 1.75rem 1.75rem 1.5rem;
+  transform: translateY(14px) scale(.97);
+  opacity: 0;
+  transition: transform .22s cubic-bezier(.34,1.56,.64,1), opacity .2s ease;
+}
+
+.modal-overlay.is-open .modal-box {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+.modal-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--red-bg);
+  color: var(--red);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  margin: 0 auto 1rem;
+}
+
+.modal-box h3 {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  text-align: center;
+  margin-bottom: .5rem;
+}
+
+.modal-box p {
+  font-size: .85rem;
+  color: var(--text-secondary);
+  text-align: center;
+  line-height: 1.55;
+  margin-bottom: 1.5rem;
+}
+
+.modal-box p strong {
+  color: var(--text-primary);
+}
+
+.modal-actions {
+  display: flex;
+  gap: .75rem;
+}
+
+.modal-actions .btn {
+  flex: 1;
+  justify-content: center;
+}
+
+/* Variante de modal informativo (no destructivo), por si se reutiliza */
+.modal-icon.modal-icon-info {
+  background: var(--brand-secondary-light);
+  color: var(--brand-secondary);
+}
+
+/* ── Responsive: acciones de tabla en pantallas chicas ───────── */
+@media (max-width: 640px) {
+  .row-actions { gap: .3rem; }
+  .btn-icon { width: 30px; height: 30px; font-size: .78rem; }
+  .modal-box { padding: 1.4rem 1.25rem 1.25rem; }
+}
+
+/* Contenedor flexible para alinear el mensaje y el botón */
+.alert-dismissible {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    padding-right: 1rem;
+}
+
+/* Estilos para el botón transparentado de cierre */
+.alert-close {
+    background: none;
+    border: none;
+    color: inherit; /* Adopta el color del texto de la alerta (verde o amarillo) */
+    font-size: 1.1rem;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.2s ease;
+    display: flex;
+    align-items: center;
+    padding: 0.2rem;
+}
+
+.alert-close:hover {
+    opacity: 1;
+}
+
+.foto-preview {
+    margin-top: .5rem;
+    min-height: 80px;
+    border: 1.5px dashed var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: border-color .2s;
+    background: var(--bg-input);
+}
+
+.foto-preview:has(img) {
+    border-color: var(--green);
+    border-style: solid;
+}

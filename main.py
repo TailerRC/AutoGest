@@ -21,6 +21,9 @@ from auth import login, puede_acceder, registrar_accion
 from database import get_oracle_connection, get_mongo_connection
 import os
 from dotenv import load_dotenv
+from starlette.datastructures import UploadFile
+
+FOTOS_PATH = os.getenv("FOTOS_VEHICULOS_PATH", "fotos_vehiculos")
 
 # ── Importar helpers ──────────────────────────────────────────────────
 from routes.helpers import layout, login_layout, no_perm, badge_estado
@@ -36,7 +39,7 @@ from controllers.vehiculos_ctrl import (
 )
 from controllers.empleados_ctrl import (
     ctrl_empleados_list, ctrl_empleados_nuevo, ctrl_empleados_crear,
-    ctrl_empleados_editar, ctrl_empleados_actualizar,
+    ctrl_empleados_editar, ctrl_empleados_actualizar, ctrl_empleados_eliminar,
 )
 from controllers.ordenes_ctrl import (
     ctrl_ordenes_list, ctrl_ordenes_detalle, ctrl_ordenes_nueva, ctrl_ordenes_crear,
@@ -69,6 +72,7 @@ from controllers.proveedores_ctrl import (
     ctrl_proveedores_list, ctrl_proveedores_nuevo, ctrl_proveedores_crear,
     ctrl_proveedores_editar, ctrl_proveedores_actualizar
 )
+from controllers import deps
 
 load_dotenv()
 
@@ -122,7 +126,7 @@ def get(req):
                 cls="logo-img-wrap"
             ),
             H1("AutoGest"),
-            P("Sistema de Gestión de Taller Mecánico"),
+            P("Sistema de Gestión de Taller Mecánico (Autogest)"),
             cls="login-logo"
         ),
         alert,
@@ -162,7 +166,8 @@ def get(req):
 @rt("/login")
 def post(req, username: str, password: str):
     """Procesa el login."""
-    usuario = login(username, password)
+    ip = req.client.host if req.client else "desconocida"
+    usuario = login(username, password, ip)
     if not usuario:
         return RedirectResponse("/login?error=Usuario+o+contraseña+incorrectos", status_code=303)
     req.session["usuario"] = usuario
@@ -189,53 +194,106 @@ def get(req):
         return RedirectResponse("/login", status_code=303)
 
     usuario = req.session.get("usuario")
-    db = get_oracle_connection()
-    mongo = get_mongo_connection()
 
-    clientes   = db.get_all_clientes()
-    vehiculos  = db.get_all_vehiculos()
-    ordenes    = db.get_all_ordenes()
-    repuestos  = db.get_all_repuestos()
-    facturas   = db.get_all_facturas()
-    alertas    = mongo.get_alertas_activas()
-    bitacoras  = mongo.get_all_bitacoras()
+    clientes   = deps.clientes.listar()
+    vehiculos  = deps.vehiculos.listar()
+    ordenes    = deps.ordenes.listar()
+    repuestos  = deps.repuestos.listar()
+    facturas   = deps.facturas.listar()
 
-    pendientes  = sum(1 for o in ordenes if o["estado"] == "pendiente")
-    en_proceso  = sum(1 for o in ordenes if o["estado"] == "en_proceso")
-    completadas = sum(1 for o in ordenes if o["estado"] == "completada")
-    criticos    = sum(1 for r in repuestos if r["stock"] <= 2)
+    # Evalúa las reglas de negocio y genera alertas nuevas si corresponde
+    # (stock bajo, retraso de órdenes, facturas vencidas). Es idempotente.
+    deps.alertas.evaluar_todas()
+    alertas = deps.alertas.listar_activas(limit=8)
+
+    stats_estados = deps.ordenes.get_stats_estados(ordenes)
+    pendientes  = stats_estados["pendiente"]
+    en_proceso  = stats_estados["en_proceso"]
+    completadas = stats_estados["completada"]
+    canceladas  = stats_estados["cancelada"]
+
+    criticos    = len(deps.repuestos.listar_criticos())
     pendiente_cobro = sum(f["total"] for f in facturas if f["estado_pago"] == "pendiente")
+    pagado_total     = sum(f["total"] for f in facturas if f["estado_pago"] == "pagada")
+    
+    # Órdenes por mecánico (para el gráfico de barras)
+    conteo_mecanico = {}
+    for o in ordenes:
+        nombre = o.get("nombre_empleado", "Sin asignar")
+        conteo_mecanico[nombre] = conteo_mecanico.get(nombre, 0) + 1
+    mecanicos_labels = list(conteo_mecanico.keys())
+    mecanicos_data   = list(conteo_mecanico.values())
+
+    # Stock crítico por repuesto (para el gráfico de barras horizontal)
+    repuestos_criticos_chart = deps.repuestos.listar_criticos()[:8]
+    stock_labels = [r["nombre"] for r in repuestos_criticos_chart]
+    stock_data   = [r["stock"] for r in repuestos_criticos_chart]
+
+    def stat_card(icon, valor, label, color, trend=None):
+        trend_el = Span(trend, cls="stat-trend") if trend else ""
+        return Div(
+            Div(I(cls=icon), cls=f"stat-icon {color}"),
+            Div(
+                Div(valor, cls="stat-value"),
+                Div(label, cls="stat-label"),
+                trend_el,
+                cls="stat-info"
+            ),
+            cls="stat-card"
+        )
 
     stats = Div(
-        Div(Div(I(cls="fa-solid fa-users"), cls="stat-icon cyan"),    Div(Div(str(len(clientes)),  cls="stat-value"), Div("Clientes",      cls="stat-label"), cls="stat-info"), cls="stat-card"),
-        Div(Div(I(cls="fa-solid fa-car"),   cls="stat-icon blue"),    Div(Div(str(len(vehiculos)), cls="stat-value"), Div("Vehículos",     cls="stat-label"), cls="stat-info"), cls="stat-card"),
-        Div(Div(I(cls="fa-solid fa-clipboard-list"), cls="stat-icon indigo"), Div(Div(str(len(ordenes)), cls="stat-value"), Div("Órdenes", cls="stat-label"), cls="stat-info"), cls="stat-card"),
-        Div(Div(I(cls="fa-solid fa-gears"), cls="stat-icon blue"),    Div(Div(str(en_proceso),     cls="stat-value"), Div("En Proceso",    cls="stat-label"), cls="stat-info"), cls="stat-card"),
-        Div(Div(I(cls="fa-solid fa-clock"), cls="stat-icon yellow"),  Div(Div(str(pendientes),     cls="stat-value"), Div("Pendientes",    cls="stat-label"), cls="stat-info"), cls="stat-card"),
-        Div(Div(I(cls="fa-solid fa-triangle-exclamation"), cls="stat-icon red"), Div(Div(str(criticos), cls="stat-value"), Div("Stock Crítico", cls="stat-label"), cls="stat-info"), cls="stat-card"),
-        Div(Div(I(cls="fa-solid fa-file-invoice"), cls="stat-icon teal"), Div(Div(str(len(facturas)), cls="stat-value"), Div("Facturas",   cls="stat-label"), cls="stat-info"), cls="stat-card"),
-        Div(Div(I(cls="fa-solid fa-sack-dollar"), cls="stat-icon green"), Div(Div(f"S/. {pendiente_cobro:,.0f}", cls="stat-value"), Div("Por Cobrar", cls="stat-label"), cls="stat-info"), cls="stat-card"),
+        stat_card("fa-solid fa-users", str(len(clientes)), "Clientes", "cyan"),
+        stat_card("fa-solid fa-car", str(len(vehiculos)), "Vehículos", "blue"),
+        stat_card("fa-solid fa-clipboard-list", str(len(ordenes)), "Órdenes", "indigo"),
+        stat_card("fa-solid fa-triangle-exclamation", str(criticos), "Stock Crítico", "red"),
+        stat_card("fa-solid fa-sack-dollar", f"S/. {pendiente_cobro:,.0f}", "Por Cobrar", "green"),
         cls="stats-grid"
     )
 
-    # Alertas del sistema (MongoDB)
+    # Alertas del sistema (MongoDB) — renderizado legible, no el dict crudo
+    ICONOS_ALERTA = {
+        "Logística - Stock Bajo":         ("fa-solid fa-box-open",          "badge-yellow"),
+        "Operaciones - Retraso":          ("fa-solid fa-clock",             "badge-orange"),
+        "Seguridad - Acceso Denegado":    ("fa-solid fa-user-lock",         "badge-red"),
+        "Facturación - Pago Vencido":     ("fa-solid fa-file-circle-exclamation", "badge-red"),
+    }
+
+    def _texto_alerta(a: dict) -> str:
+        """Convierte detalle_notificacion en una frase legible, según el tipo de evento."""
+        tipo = a.get("tipo_evento", "")
+        d = a.get("detalle_notificacion", {})
+        if tipo == "Logística - Stock Bajo":
+            return f"{d.get('item','—')}: quedan {d.get('stock_actual','—')} unidades (mínimo {d.get('minimo_requerido','—')})"
+        if tipo == "Operaciones - Retraso":
+            return d.get("mensaje", f"Orden #{d.get('idOrden','—')} con retraso")
+        if tipo == "Seguridad - Acceso Denegado":
+            return f"Usuario '{d.get('username','—')}' — {d.get('motivo','—')} (IP: {d.get('ip','—')})"
+        if tipo == "Facturación - Pago Vencido":
+            return f"Factura #{d.get('idFactura','—')} de {d.get('cliente','—')} — S/. {d.get('total',0):,.2f}, vencida hace {d.get('dias_vencida','—')} días"
+        return str(d)
+
     alertas_cards = []
-    for a in alertas[:4]:
-        prioridad_cls = "badge-red" if "Crítico" in a.get("tipo_evento", "") or "Seguridad" in a.get("tipo_evento", "") else "badge-yellow"
+    for a in alertas:
+        tipo = a.get("tipo_evento", "")
+        icono, badge_cls = ICONOS_ALERTA.get(tipo, ("fa-solid fa-bell", "badge-gray"))
         alertas_cards.append(
             Div(
                 Div(
-                    Span(a.get("tipo_evento", "").upper(), cls=f"badge {prioridad_cls}"),
+                    Span(I(cls=icono), " ", tipo, cls=f"badge {badge_cls}"),
                     Span(a.get("codigoAlerta", ""), cls="text-muted text-sm font-mono"),
                     style="display:flex;align-items:center;justify-content:space-between;"
                 ),
-                P(str(a.get("detalle_notificacion", {})), style="margin-top:.4rem;font-size:.85rem;color:var(--text-secondary);"),
+                P(_texto_alerta(a), style="margin-top:.4rem;font-size:.85rem;color:var(--text-secondary);"),
                 style="padding:.75rem;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:.5rem;"
             )
         )
 
-    # Últimas órdenes
-    ultimas = ordenes[-5:]
+    # Últimas órdenes — ya vienen ordenadas DESC por id_orden desde el repo
+    # (VW_ORDENES_TRABAJO ORDER BY id_orden DESC), así que tomamos las primeras 5
+    # SIN invertir. El bug anterior aplicaba reversed() sobre un slice del final
+    # de una lista que ya estaba en orden ascendente — daba las más antiguas.
+    ultimas = ordenes[:5]
     filas_ord = [
         Tr(
             Td(f"#{o['id_orden']}", cls="font-mono text-sm"),
@@ -244,7 +302,7 @@ def get(req):
             Td(badge_estado(o["estado"])),
             Td(A("Ver", href=f"/ordenes/{o['id_orden']}", cls="btn btn-sm btn-secondary")),
         )
-        for o in reversed(ultimas)
+        for o in ultimas
     ]
 
     nombre_u = usuario.get("username","")
@@ -253,27 +311,75 @@ def get(req):
     contenido = Div(
         # Bienvenida
         Div(
-            Div(
-                Div(
-                    H2(I(cls="fa-solid fa-hand-wave"), f" ¡Bienvenido, {nombre_u}!"),
-                    P("Sesión activa como: ", Span(rol_u.capitalize(), cls=f"badge badge-blue"), cls="text-muted text-sm mt-1"),
-                    style="flex:1;"
-                ),
-                Div(
-                    Span(I(cls="fa-solid fa-database"), " Oracle", cls="badge badge-red"),
-                    Span(I(cls="fa-solid fa-leaf"), " MongoDB", cls="badge badge-green"),
-                    cls="flex gap-1", style="align-items:center;"
-                ),
-                cls="card-header", style="display:flex;align-items:center;justify-content:space-between;"
-            ),
-            cls="card mb-2"
+            H2(I(cls="fa-solid fa-hand-wave"), f" ¡Bienvenido, {nombre_u}!"),
+            P("Sesión activa como: ", Span(rol_u.capitalize(), cls="badge badge-blue"), cls="text-muted text-sm mt-1"),
+            cls="dashboard-welcome"
         ),
         stats,
-        # Dos columnas
+        # Gráficos del dashboard (Chart.js)
+        Div(
+            Div(
+                Div(H2(I(cls="fa-solid fa-chart-pie"), " Órdenes por Estado"), cls="card-header"),
+                Div(
+                    Div(
+                        Canvas(id="chartEstados", role="img",
+                               aria_label=f"Gráfico circular de órdenes por estado: {pendientes} pendientes, {en_proceso} en proceso, {completadas} completadas, {canceladas} canceladas"),
+                        style="position:relative;height:190px;"
+                    ),
+                    Div(id="legendEstados", cls="chart-legend"),
+                    cls="card-body"
+                ),
+                cls="card"
+            ),
+            Div(
+                Div(H2(I(cls="fa-solid fa-sack-dollar"), " Facturas: Pagadas vs Pendientes"), cls="card-header"),
+                Div(
+                    Div(
+                        Canvas(id="chartFacturas", role="img",
+                               aria_label=f"Gráfico circular de facturas: S/. {pagado_total:,.0f} pagado, S/. {pendiente_cobro:,.0f} pendiente de cobro"),
+                        style="position:relative;height:190px;"
+                    ),
+                    Div(id="legendFacturas", cls="chart-legend"),
+                    cls="card-body"
+                ),
+                cls="card"
+            ),
+            cls="dashboard-charts-grid"
+        ),
+        Div(
+            Div(
+                Div(H2(I(cls="fa-solid fa-boxes-stacked"), " Stock Crítico por Repuesto"), cls="card-header"),
+                Div(
+                    Div(
+                        Canvas(id="chartStock", role="img",
+                               aria_label="Gráfico circular de repuestos con stock crítico, mostrando nombre y cantidad disponible de cada uno"),
+                        style="position:relative;height:190px;"
+                    ) if stock_labels else P("Sin repuestos en estado crítico.", cls="no-data"),
+                    Div(id="legendStock", cls="chart-legend") if stock_labels else "",
+                    cls="card-body"
+                ),
+                cls="card"
+            ),
+            Div(
+                Div(H2(I(cls="fa-solid fa-user-gear"), " Órdenes por Mecánico"), cls="card-header"),
+                Div(
+                    Div(
+                        Canvas(id="chartMecanicos", role="img",
+                               aria_label="Gráfico circular de cantidad de órdenes atendidas por cada mecánico"),
+                        style="position:relative;height:190px;"
+                    ),
+                    Div(id="legendMecanicos", cls="chart-legend"),
+                    cls="card-body"
+                ),
+                cls="card"
+            ),
+            cls="dashboard-charts-grid"
+        ),
+    # Dos columnas
         Div(
             Div(
                 Div(
-                    Div(H2(I(cls="fa-solid fa-clipboard-list"), " Últimas Órdenes"), Span(I(cls="fa-solid fa-database"), " Oracle", cls="db-tag oracle"), cls="card-header"),
+                    Div(H2(I(cls="fa-solid fa-clipboard-list"), " Últimas Órdenes"), cls="card-header"),
                     Div(
                         Div(
                             Table(
@@ -290,20 +396,179 @@ def get(req):
             ),
             Div(
                 Div(
-                    Div(H2(I(cls="fa-solid fa-bell"), " Alertas del Sistema"), Span(I(cls="fa-solid fa-leaf"), " MongoDB", cls="db-tag mongo"), cls="card-header"),
+                    Div(H2(I(cls="fa-solid fa-bell"), " Alertas del Sistema"), cls="card-header"),
                     Div(
-                        *alertas_cards if alertas_cards else [P("Sin alertas activas.", cls="no-data")],
+                        Div(
+                            *alertas_cards if alertas_cards else [P("Sin alertas activas.", cls="no-data")],
+                            cls="scroll-panel"
+                        ),
                         cls="card-body"
                     ),
                     cls="card"
                 ),
                 style="flex:1;"
             ),
-            cls="flex gap-2", style="align-items:flex-start;"
+            cls="flex gap-2", style="align-items:stretch;"
         ),
-        cls="page-body"
     )
-    return layout(req, "Dashboard", "🏠 Dashboard", f"AutoGest — {len(ordenes)} órdenes activas", contenido)
+
+    chart_script = Script(f"""
+    (function() {{
+        const colorBorgona = '#7A0C11';
+        const colorIndigo  = '#4A2E80';
+        const colorAzul    = '#3B82F6';
+        const colorCian    = '#06B6D4';
+        const colorVerde   = '#10B981';
+        const colorAmbar   = '#F59E0B';
+        const colorRojo    = '#EF4444';
+        const colorTeal    = '#0d9488';
+        const paletaDonut  = [colorBorgona, colorIndigo, colorAzul, colorCian, colorVerde, colorAmbar, colorRojo, colorTeal];
+
+        function crearLeyenda(contenedorId, labels, data, sufijo) {{
+            const cont = document.getElementById(contenedorId);
+            if (!cont) return;
+            cont.innerHTML = '';
+            labels.forEach(function(label, i) {{
+                const item = document.createElement('div');
+                item.className = 'chart-legend-item';
+                const dot = document.createElement('span');
+                dot.className = 'dot';
+                dot.style.background = paletaDonut[i % paletaDonut.length];
+                const lbl = document.createElement('span');
+                lbl.className = 'legend-label';
+                lbl.textContent = label;
+                lbl.title = label;
+                const val = document.createElement('span');
+                val.className = 'legend-value';
+                val.textContent = data[i] + (sufijo || '');
+                item.appendChild(dot);
+                item.appendChild(lbl);
+                item.appendChild(val);
+                cont.appendChild(item);
+            }});
+        }}
+
+        // 1. Órdenes por estado (dona)
+        const estadosLabels = ['Pendiente', 'En Proceso', 'Completada', 'Cancelada'];
+        const estadosData = [{pendientes}, {en_proceso}, {completadas}, {canceladas}];
+        new Chart(document.getElementById('chartEstados'), {{
+            type: 'doughnut',
+            data: {{
+                labels: estadosLabels,
+                datasets: [{{
+                    data: estadosData,
+                    backgroundColor: [colorAmbar, colorAzul, colorVerde, colorRojo],
+                    borderWidth: 2,
+                    borderColor: '#ffffff'
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {{ legend: {{ display: false }} }}
+            }}
+        }});
+        crearLeyenda('legendEstados', estadosLabels, estadosData);
+
+        // 2. Facturas pagadas vs pendientes (dona)
+        const facturasLabels = ['Pagado', 'Pendiente de cobro'];
+        const facturasData = [{pagado_total}, {pendiente_cobro}];
+        new Chart(document.getElementById('chartFacturas'), {{
+            type: 'doughnut',
+            data: {{
+                labels: facturasLabels,
+                datasets: [{{
+                    data: facturasData,
+                    backgroundColor: [colorVerde, colorBorgona],
+                    borderWidth: 2,
+                    borderColor: '#ffffff'
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {{
+                    legend: {{ display: false }},
+                    tooltip: {{
+                        callbacks: {{
+                            label: function(ctx) {{
+                                return ctx.label + ': S/. ' + ctx.parsed.toLocaleString('es-PE', {{minimumFractionDigits: 2}});
+                            }}
+                        }}
+                    }}
+                }}
+            }}
+        }});
+        crearLeyenda('legendFacturas', facturasLabels, facturasData.map(v => 'S/. ' + v.toLocaleString('es-PE', {{minimumFractionDigits: 0}})), '');
+
+        // 3. Stock crítico por repuesto (circular)
+        const stockLabels = {stock_labels!r};
+        const stockData = {stock_data!r};
+        if (stockLabels.length > 0) {{
+            new Chart(document.getElementById('chartStock'), {{
+                type: 'doughnut',
+                data: {{
+                    labels: stockLabels,
+                    datasets: [{{
+                        data: stockData,
+                        backgroundColor: paletaDonut.slice(0, stockLabels.length),
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {{
+                        legend: {{ display: false }},
+                        tooltip: {{
+                            callbacks: {{
+                                label: function(ctx) {{
+                                    return ctx.label + ': ' + ctx.parsed + ' unidades';
+                                }}
+                            }}
+                        }}
+                    }}
+                }}
+            }});
+            crearLeyenda('legendStock', stockLabels, stockData, ' u.');
+        }}
+
+        // 4. Órdenes por mecánico (circular)
+        const mecanicosLabels = {mecanicos_labels!r};
+        const mecanicosData = {mecanicos_data!r};
+        new Chart(document.getElementById('chartMecanicos'), {{
+            type: 'doughnut',
+            data: {{
+                labels: mecanicosLabels,
+                datasets: [{{
+                    data: mecanicosData,
+                    backgroundColor: paletaDonut.slice(0, mecanicosLabels.length),
+                    borderWidth: 2,
+                    borderColor: '#ffffff'
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {{
+                    legend: {{ display: false }},
+                    tooltip: {{
+                        callbacks: {{
+                            label: function(ctx) {{
+                                return ctx.label + ': ' + ctx.parsed + ' órdenes';
+                            }}
+                        }}
+                    }}
+                }}
+            }}
+        }});
+        crearLeyenda('legendMecanicos', mecanicosLabels, mecanicosData, ' ord.');
+    }})();
+    """)
+
+    return layout(req, "Dashboard", "Dashboard", f"AutoGest — {len(ordenes)} órdenes activas",
+                   Div(contenido, Script(src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"), chart_script))
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -373,6 +638,48 @@ def post(req, id_vehiculo: int):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
     return ctrl_vehiculos_eliminar(req, id_vehiculo)
 
+@rt("/vehiculos/{id_vehiculo}/fotos")
+async def post(req, id_vehiculo: int):
+    if not require_login(req):
+        return RedirectResponse("/login", status_code=303)
+
+    form     = await req.form()
+    placa    = form.get("placa", "").upper().strip()
+    frontal  = form.get("foto_frontal")
+    lateral  = form.get("foto_lateral")
+    angular  = form.get("foto_angular")
+
+    archivos = {
+        "FRONTAL": frontal,
+        "LATERAL": lateral,
+        "ANGULAR": angular,
+    }
+
+    # Validar que las 3 estén presentes
+    for vista, archivo in archivos.items():
+        if not archivo or not getattr(archivo, "filename", None):
+            return RedirectResponse(
+                f"/vehiculos/{id_vehiculo}/editar?error=Debes+subir+las+3+fotos+({vista}+falta)",
+                status_code=303
+            )
+
+    # Crear carpeta {PLACA}_FOTOS dentro de la ruta general
+    carpeta = os.path.join(FOTOS_PATH, f"{placa}_FOTOS")
+    os.makedirs(carpeta, exist_ok=True)
+
+    # Guardar cada foto
+    for vista, archivo in archivos.items():
+        ext     = os.path.splitext(archivo.filename)[1].lower() or ".jpg"
+        nombre  = f"{placa}_{vista}{ext}"
+        destino = os.path.join(carpeta, nombre)
+        contenido = await archivo.read()
+        with open(destino, "wb") as f:
+            f.write(contenido)
+
+    return RedirectResponse(
+        f"/vehiculos/{id_vehiculo}/editar?msg=fotos_ok",
+        status_code=303
+    )
 
 # ═══════════════════════════════════════════════════════════════════════
 # EMPLEADOS
@@ -402,6 +709,10 @@ def post(req, id_empleado: int, nombre: str, cargo: str, especialidad: str):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
     return ctrl_empleados_actualizar(req, id_empleado, nombre, cargo, especialidad)
 
+@rt("/empleados/eliminar")
+def post(req, id_empleado: int):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return ctrl_empleados_eliminar(req, id_empleado)
 
 # ═══════════════════════════════════════════════════════════════════════
 # ÓRDENES DE TRABAJO
@@ -536,7 +847,7 @@ def get(req, id_usuario: int):
 
 @rt("/usuarios/actualizar")
 def post(req, id_usuario: int, id_empleado: int, username: str,
-         password: str, rol: str, estado: str):
+         password: str = None, rol: str = None, estado: str = None):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
     return ctrl_usuarios_actualizar(req, id_usuario, id_empleado, username, password, rol, estado)
 
