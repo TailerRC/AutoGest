@@ -1263,3 +1263,120 @@ tbody tr {
     border-color: var(--green);
     border-style: solid;
 }
+
+/* ==========================================
+MODULO COTIZACIONES
+========================================== */
+
+/* Caja de filtros y búsquedas con espaciado consistente */
+.filter-card {
+  box-shadow: var(--shadow-sm);
+  transition: all .2s ease;
+}
+
+.filter-card:hover {
+  box-shadow: var(--shadow);
+  border-color: var(--brand-secondary-light);
+}
+
+/* Formulario dinámico de servicios */
+#items-tbody tr:hover {
+  background: rgba(122, 12, 17, 0.02);
+  /* Sutil tinte primario al pasar el mouse */
+}
+
+/* Detalle General y Totales */
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.detail-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-page);
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+/* Mejorar legibilidad visual del badge del código de cotización */
+.table-wrap .badge-gray {
+  font-size: 0.825rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 0.3rem 0.6rem;
+  background: var(--bg-page);
+  border: 1px solid var(--border-dark);
+  color: var(--brand-secondary-dark);
+}
+
+/* Mejoras de diseño y espaciado de paginación */
+.paginacion-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1.5px solid var(--border);
+}
+
+.paginacion-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.paginacion-nav .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border-radius: var(--radius);
+  transition: all 0.2s ease-in-out;
+}
+
+/* Botón inactivo / secundario */
+.paginacion-nav .btn-secondary {
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.paginacion-nav .btn-secondary:hover:not(.disabled) {
+  background: var(--brand-secondary-light);
+  color: var(--brand-secondary-dark);
+  border-color: var(--border-dark);
+  transform: translateY(-1px);
+}
+
+/* Botón activo / primario */
+.paginacion-nav .btn-primary {
+  background: var(--brand-primary);
+  border: 1.5px solid var(--brand-primary);
+  color: #fff;
+  font-weight: 700;
+  box-shadow: var(--shadow-sm);
+}
+
+.paginacion-nav .btn-primary:hover {
+  background: var(--brand-primary-dark);
+  border-color: var(--brand-primary-dark);
+}
+
+/* Botón deshabilitado */
+.paginacion-nav .btn.disabled,
+.paginacion-nav span.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+  background: var(--bg-page);
+  border-color: var(--border);
+  color: var(--text-muted);
+}

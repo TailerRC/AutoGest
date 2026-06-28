@@ -649,13 +649,35 @@ class MongoDB:
 
     # ── COTIZACIONES ──────────────────────────────────────────────────
     def get_all_cotizaciones(self) -> List[Dict]:
+        """
+        Consulta y retorna todos los documentos de la colección 'cotizaciones' en MongoDB.
+        Remueve o convierte el ObjectID nativo a String para compatibilidad en el frontend.
+        """
         return self._remove_id(list(self.cotizaciones.find()))
 
     def get_cotizacion(self, codigo: str) -> Optional[Dict]:
+        """
+        Busca un único documento de cotización por su código único de negocio.
+        """
         return self._remove_id_single(self.cotizaciones.find_one({"codigoCotizacion": codigo}))
 
+    def get_ultimo_codigo_cotizacion(self, prefix: str) -> Optional[str]:
+        """
+        Obtiene el último código de cotización registrado para un prefijo de año específico en MongoDB.
+        Utiliza el índice/ordenación nativo por codigoCotizacion descendente.
+        """
+        doc = self.cotizaciones.find_one(
+            {"codigoCotizacion": {"$regex": f"^{prefix}"}},
+            sort=[("codigoCotizacion", -1)]
+        )
+        return doc.get("codigoCotizacion") if doc else None
+
     def create_cotizacion(self, codigo: str, id_cliente: int, id_vehiculo: int,
-                          fecha_validez: str, servicios: list, total: float) -> Dict:
+                          fecha_validez: Any, servicios: list, total: float) -> Dict:
+        """
+        Inserta una nueva cotización con servicios y repuestos embebidos en MongoDB.
+        Soporta fecha_validez como tipo datetime.datetime o string ISO.
+        """
         nuevo = {
             "codigoCotizacion": codigo,
             "idCliente": id_cliente,
@@ -666,7 +688,7 @@ class MongoDB:
         }
         self.cotizaciones.insert_one(nuevo)
         return self._remove_id_single(nuevo)
-
+    
     # ── PROVEEDORES ───────────────────────────────────────────────────
     def get_all_proveedores(self) -> List[Dict]:
         return self._remove_id(list(self.proveedores.find()))
