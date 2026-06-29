@@ -1635,3 +1635,63 @@ MODULO COTIZACIONES
   text-transform: uppercase;
   letter-spacing: .05em;
 }
+
+/* ── Acordeón de Bitácoras (Reportes — múltiples bitácoras por vehículo) ── */
+.acordeon-lista {
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+}
+
+.acordeon-item {
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: border-color .2s, box-shadow .2s;
+}
+
+.acordeon-item[open] {
+  border-color: var(--brand-secondary-light);
+  box-shadow: var(--shadow-sm);
+}
+
+.acordeon-summary {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .85rem 1.1rem;
+  cursor: pointer;
+  list-style: none;
+  font-size: .85rem;
+  color: var(--text-primary);
+  background: linear-gradient(to right, rgba(47,72,88,.03), transparent);
+  transition: background .15s;
+  user-select: none;
+}
+
+.acordeon-summary::-webkit-details-marker {
+  display: none;
+}
+
+.acordeon-summary:hover {
+  background: rgba(47,72,88,.06);
+}
+
+.acordeon-icon {
+  font-size: .75rem;
+  color: var(--brand-secondary);
+  transition: transform .2s ease;
+  flex-shrink: 0;
+}
+
+.acordeon-item[open] .acordeon-summary .acordeon-icon {
+  transform: rotate(90deg);
+  color: var(--brand-primary);
+}
+
+.acordeon-body {
+  padding: 1.1rem 1.25rem 1.25rem;
+  border-top: 1px solid var(--border);
+  animation: fadeIn .2s ease;
+}

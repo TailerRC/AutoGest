@@ -31,12 +31,21 @@ def render_historial_list(req, usuario, historiales, q="", estado="todos", orden
     """
     filas = []
     for h in historiales:
-        diagnosticos = h.get("diagnosticos_asociados", [])
-        
+        detalles = h.get("diagnosticos_detalle", [])
+        cantidad = len(detalles)
+        tags_diag = [
+            Span(
+                I(cls="fa-solid fa-stethoscope"),
+                f" {cantidad} diagnóstico{'s' if cantidad != 1 else ''}",
+                cls="tag",
+                title=", ".join(d["codigoDiagnostico"] for d in detalles)  # tooltip con los códigos
+            )
+        ] if detalles else []
+                
         acciones = [
             Button(
                 I(cls="fa-solid fa-eye"), " Ver Historial",
-                onclick=f"verHistorial('{h['_id']}')",
+                onclick=f"verHistorial('{str(h['_id'])}')",
                 cls="btn btn-sm btn-secondary",
                 title="Ver Ficha de Historial",
                 style="padding: 0.35rem 0.7rem; font-size: 0.8rem;"
@@ -47,7 +56,7 @@ def render_historial_list(req, usuario, historiales, q="", estado="todos", orden
             Td(Span(h.get("vehiculo_str", "—"), style="font-weight:600; color:var(--text-primary);"), data_label="Vehículo"),
             Td(f"{h.get('kilometraje_ingreso', 0):,} km", data_label="Kilometraje"),
             Td(h.get("fecha_servicio_str", "—"), data_label="Fecha Servicio"),
-            Td(Div(*[Span(d, cls="tag") for d in diagnosticos], cls="tag-list") if diagnosticos else "—", data_label="Diagnósticos"),
+            Td(Div(*tags_diag, cls="tag-list") if tags_diag else "—", data_label="Diagnósticos"),
             Td(badge_estado_historial(h.get("estado_final", "pendiente")), data_label="Estado"),
             Td(Div(*acciones, cls="flex gap-1") if acciones else "—", data_label="Acciones")
         ))
@@ -215,9 +224,15 @@ def render_historial_list(req, usuario, historiales, q="", estado="todos", orden
                     Div(Label("Placa"), Div(id="modal-placa", cls="tech-val"), cls="tech-item"),
                     Div(Label("Fecha de Servicio"), Div(id="modal-fecha", cls="tech-val"), cls="tech-item"),
                     Div(Label("Kilometraje"), Div(id="modal-kilometraje", cls="tech-val"), cls="tech-item"),
-                    Div(Label("Diagnósticos Asociados"), Div(id="modal-diagnosticos", cls="tech-val"), cls="tech-item"),
                     Div(Label("Estado Final"), Div(id="modal-estado", cls="tech-val"), cls="tech-item"),
                     cls="tech-grid"
+                ),
+                # Sección diagnósticos expandible
+                Div(
+                    H4(I(cls="fa-solid fa-stethoscope"), " Diagnósticos Asociados",
+                    style="margin: 1rem 0 0.5rem; font-size:0.95rem; color:var(--text-primary);"),
+                    Div(id="modal-diagnosticos-lista"),
+                    cls=""
                 ),
                 cls="tech-modal-body"
             ),
@@ -230,14 +245,26 @@ def render_historial_list(req, usuario, historiales, q="", estado="todos", orden
     # Serializar historial completo para consulta JS del modal
     historial_dict = {}
     for h in historiales:
-        diagnosticos = h.get("diagnosticos_asociados", [])
-        historial_dict[h["_id"]] = {
+        detalles = h.get("diagnosticos_detalle", [])
+        
+        diags_serializados = [
+            {
+                "codigo": d.get("codigoDiagnostico", "—"),
+                "especificacion": d.get("codigoEspecificacion", "—"),
+                "sintomas": ", ".join(d.get("sintomas", [])) or "—",
+                "obd": ", ".join(d.get("codigo_OBD", [])) or "—",
+                "observaciones": d.get("observaciones", "—"),
+            }
+            for d in detalles
+        ]
+
+        historial_dict[str(h["_id"])] = {
             "vehiculo": h.get("vehiculo_str", "—"),
             "placa": h.get("placa", "—"),
             "fecha": h.get("fecha_servicio_str", "—"),
             "kilometraje": f"{h.get('kilometraje_ingreso', 0):,} km",
-            "diagnosticos": ", ".join(diagnosticos) if diagnosticos else "Ninguno",
-            "estado": h.get("estado_final", "—")
+            "estado": h.get("estado_final", "—"),
+            "diagnosticos": diags_serializados,
         }
 
     js_script = Script(f"""
@@ -251,8 +278,29 @@ def render_historial_list(req, usuario, historiales, q="", estado="todos", orden
             document.getElementById('modal-placa').innerText = data.placa;
             document.getElementById('modal-fecha').innerText = data.fecha;
             document.getElementById('modal-kilometraje').innerText = data.kilometraje;
-            document.getElementById('modal-diagnosticos').innerText = data.diagnosticos;
             document.getElementById('modal-estado').innerText = data.estado;
+            
+            // Renderizar diagnósticos
+            const lista = document.getElementById('modal-diagnosticos-lista');
+            if (!data.diagnosticos || data.diagnosticos.length === 0) {{
+                lista.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">Sin diagnósticos asociados.</p>';
+            }} else {{
+                lista.innerHTML = data.diagnosticos.map(d => `
+                    <div style="border:1px solid var(--border); border-radius:var(--radius); padding:0.75rem 1rem; margin-bottom:0.6rem; background:var(--bg-page);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;">
+                            <span style="font-weight:700; color:var(--text-primary); font-size:0.9rem;">
+                                <i class="fa-solid fa-tag"></i> ${{d.codigo}}
+                            </span>
+                            <span style="font-size:0.78rem; color:var(--text-muted);">${{d.especificacion}}</span>
+                        </div>
+                        <div style="font-size:0.82rem; color:var(--text-secondary); display:grid; gap:0.2rem;">
+                            <span><b>Síntomas:</b> ${{d.sintomas}}</span>
+                            <span><b>Códigos OBD:</b> ${{d.obd}}</span>
+                            <span><b>Observaciones:</b> ${{d.observaciones}}</span>
+                        </div>
+                    </div>
+                `).join('');
+            }}
             
             document.getElementById('tech-modal').classList.add('active');
         }}
@@ -261,14 +309,11 @@ def render_historial_list(req, usuario, historiales, q="", estado="todos", orden
             document.getElementById('tech-modal').classList.remove('active');
         }}
         
-        // Cerrar modal al hacer clic en fondo
         window.addEventListener('click', function(e) {{
             const modal = document.getElementById('tech-modal');
-            if (e.target === modal) {{
-                cerrarModal();
-            }}
+            if (e.target === modal) cerrarModal();
         }});
-    """)
+""")
 
     msg = req.query_params.get("msg", "")
     alert = Div(I(cls="fa-solid fa-circle-check"), " Registro de historial añadido exitosamente.", cls="alert alert-success") if msg == "creado" else ""

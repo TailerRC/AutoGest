@@ -28,7 +28,8 @@ class HistorialService:
         return self._repo.get_by_vehiculo(id_vehiculo)
 
     def crear(self, id_vehiculo: int, kilometraje_ingreso: int,
-              fecha_servicio: str, estado_final: str) -> Dict:
+                fecha_servicio: str, estado_final: str,
+                diagnosticos_asociados: list = None) -> Dict:
         """
         Crea un nuevo registro en el historial.
         Resuelve la fecha y la convierte a un objeto datetime nativo
@@ -52,5 +53,6 @@ class HistorialService:
             id_vehiculo=int(id_vehiculo),
             kilometraje_ingreso=int(kilometraje_ingreso),
             fecha_servicio=fecha_dt,
-            estado_final=estado_final
+            estado_final=estado_final,
+            diagnosticos_asociados=diagnosticos_asociados or []
         )

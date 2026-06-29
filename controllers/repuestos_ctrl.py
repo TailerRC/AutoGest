@@ -117,7 +117,8 @@ def ctrl_repuestos_nuevo(req):
     if not puede_acceder(usuario, "repuestos", "crear"):
         from routes.helpers import no_perm
         return no_perm(req)
-    return render_repuestos_nuevo(req)
+    proveedores = deps.proveedores.listar()
+    return render_repuestos_nuevo(req, proveedores=proveedores)
 
 
 def ctrl_repuestos_crear(req, codigo: str, nombre: str, stock: int,
@@ -150,7 +151,8 @@ def ctrl_repuestos_editar(req, id_pieza: int):
     repuesto = deps.repuestos.obtener(id_pieza)
     if not repuesto:
         return RedirectResponse("/repuestos", status_code=303)
-    return render_repuestos_editar(req, repuesto)
+    proveedores = deps.proveedores.listar()
+    return render_repuestos_editar(req, repuesto, proveedores=proveedores)
 
 
 def ctrl_repuestos_actualizar(req, id_pieza: int, codigo: str, nombre: str,

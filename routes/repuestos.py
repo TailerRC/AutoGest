@@ -666,7 +666,7 @@ def render_repuestos_list(req, usuario, repuestos, todos_repuestos, q="", filtro
 
 
 
-def render_repuestos_nuevo(req):
+def render_repuestos_nuevo(req, proveedores=None):
     """Renderiza el formulario de nuevo repuesto."""
     error = req.query_params.get("error", "")
     alert = Div(I(cls="fa-solid fa-circle-exclamation"), f" {error}", cls="alert alert-error") if error else ""
@@ -678,7 +678,16 @@ def render_repuestos_nuevo(req):
             Div(Label("Nombre"),            Input(name="nombre",      placeholder="Filtro de Aceite...", required=True), cls="form-group"),
             Div(Label("Stock inicial"),     Input(name="stock",       type="number", min="0", value="1", required=True), cls="form-group"),
             Div(Label("Precio de venta (S/.)"), Input(name="precio_venta", type="number", step="0.01", min="0", placeholder="0.00", required=True), cls="form-group"),
-            Div(Label("Proveedor"),         Input(name="proveedor",   placeholder="AutoParts SAC", required=True), cls="form-group"),
+            Div(
+                Label("Proveedor"),
+                Select(
+                    Option("— Selecciona un proveedor —", value="", disabled=True, selected=True),
+                    *[Option(p["nombreEmpresa"], value=p["nombreEmpresa"]) for p in (proveedores or [])],
+                    name="proveedor",
+                    required=True
+                ),
+                cls="form-group"
+            ),
             cls="form-grid"
         ),
         Div(
@@ -704,7 +713,7 @@ def render_repuestos_nuevo(req):
     return layout(req, "Nuevo Repuesto", "Nuevo Repuesto", "", contenido)
 
 
-def render_repuestos_editar(req, repuesto):
+def render_repuestos_editar(req, repuesto, proveedores=None):
     """Renderiza el formulario de edición de un repuesto."""
     id_pieza = repuesto["id_pieza"]
     form = Form(
@@ -713,7 +722,22 @@ def render_repuestos_editar(req, repuesto):
             Div(Label("Nombre"),        Input(name="nombre",      value=repuesto["nombre"],      required=True), cls="form-group"),
             Div(Label("Stock"),         Input(name="stock",       type="number", min="0", value=str(repuesto["stock"]), required=True), cls="form-group"),
             Div(Label("Precio (S/.)"),  Input(name="precio_venta",type="number", step="0.01", value=str(repuesto["precio_venta"]), required=True), cls="form-group"),
-            Div(Label("Proveedor"),     Input(name="proveedor",   value=repuesto["proveedor"],   required=True), cls="form-group"),
+            Div(
+                Label("Proveedor"),
+                Select(
+                    *[
+                        Option(
+                            p["nombreEmpresa"],
+                            value=p["nombreEmpresa"],
+                            selected=(p["nombreEmpresa"] == repuesto.get("proveedor", ""))
+                        )
+                        for p in (proveedores or [])
+                    ],
+                    name="proveedor",
+                    required=True
+                ),
+                cls="form-group"
+            ),
             cls="form-grid"
         ),
         Input(type="hidden", name="id_pieza", value=str(id_pieza)),

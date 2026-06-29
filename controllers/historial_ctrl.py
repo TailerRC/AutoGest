@@ -34,6 +34,13 @@ def ctrl_historial_list(req):
     # 2. Consultar colecciones de MongoDB y Oracle
     historiales = deps.historial.listar()
     vehiculos = deps.vehiculos.listar()
+    diagnosticos_todos = deps.bitacora.listar()
+
+    # Indexar por codigoDiagnostico
+    diagnosticos_index = {
+        d["codigoDiagnostico"]: d 
+        for d in diagnosticos_todos
+    }
 
     # 3. Enriquecer los registros NoSQL con los datos relacionales de Oracle y formatear fechas
     for h in historiales:
@@ -43,7 +50,6 @@ def ctrl_historial_list(req):
         h["vehiculo_marca"] = v.get("marca", "") if v else ""
         h["vehiculo_modelo"] = v.get("modelo", "") if v else ""
 
-        # Formatear la fecha de servicio de forma segura para búsqueda y renderizado
         fecha_val = h.get("fecha_servicio")
         if hasattr(fecha_val, "strftime"):
             h["fecha_servicio_str"] = fecha_val.strftime("%d/%m/%Y")
@@ -59,6 +65,14 @@ def ctrl_historial_list(req):
         else:
             h["fecha_servicio_str"] = str(fecha_val)
             h["fecha_servicio_iso"] = "2000-01-01"
+
+        # ← DENTRO del loop
+        codigos = h.get("diagnosticos_asociados", [])
+        h["diagnosticos_detalle"] = [
+            diagnosticos_index[cod]
+            for cod in codigos
+            if cod in diagnosticos_index
+        ]
 
     # 4. Filtrado en memoria (debido al cruce híbrido NoSQL + Relacional)
     filtered = []
@@ -141,7 +155,9 @@ def ctrl_historial_crear(req, id_vehiculo: int, kilometraje_ingreso: int,
         from routes.helpers import no_perm
         return no_perm(req)
     try:
-        deps.historial.crear(id_vehiculo, kilometraje_ingreso, fecha_servicio, estado_final)
+        diags_vehiculo = deps.bitacora.listar_por_vehiculo(id_vehiculo)
+        codigos = [d["codigoDiagnostico"] for d in diags_vehiculo]
+        deps.historial.crear(id_vehiculo, kilometraje_ingreso, fecha_servicio, estado_final, codigos)
         registrar_accion(usuario, "CREAR", "historial")
         return RedirectResponse("/historial?msg=creado", status_code=303)
     except Exception as e:

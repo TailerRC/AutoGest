@@ -249,11 +249,10 @@ def render_reportes_detalle(req, datos):
     empleado    = datos["empleado"]
     detalles    = datos["detalles"]
     factura     = datos["factura"]
-    bitacora    = datos["bitacora"]
     esp_tecnica = datos["esp_tecnica"]
+    bitacoras_vehiculo = datos.get("bitacoras_vehiculo", [])
+    servicios_cotizacion = datos.get("servicios_cotizacion", [])
     total_rep   = datos["total_rep"]
-    mano_obra   = datos["mano_obra"]
-    gran_total  = datos["gran_total"]
 
     filas_rep = [
         Tr(Td(d["nombre_pieza"]), Td(str(d["cantidad"])),
@@ -263,8 +262,7 @@ def render_reportes_detalle(req, datos):
 
     seccion_oracle = Div(
         Div(
-            H2(I(cls="fa-solid fa-database"), " Datos de la Orden de Trabajo"),
-            Span("Oracle (Relacional)", cls="db-tag oracle"),
+            H2(I(cls="fa-solid fa-database"), " Datos de la Orden de Repuestos"),
             style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;"
         ),
         Div(
@@ -294,50 +292,76 @@ def render_reportes_detalle(req, datos):
             Span(f"S/. {total_rep:.2f}", style="font-size:1.1rem;font-weight:700;color:var(--accent);"),
             cls="flex gap-2", style="justify-content:flex-end;align-items:center;"
         ),
+        Div(style="margin-top:1.5rem;"),
+        H2("Servicios Realizados", style="font-size:.85rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.6rem;"),
         Div(
-            Div(
-                Div(Label("N° Factura"),      Div(f"F-{factura['id_factura']:04d}" if factura else "Sin factura", cls="detail-value"), cls="detail-item"),
-                Div(Label("Total Facturado"), Div(f"S/. {factura['total']:.2f}" if factura else "—", cls="detail-value", style="color:var(--accent);font-weight:700;"), cls="detail-item"),
-                Div(Label("Método de Pago"),  Div(badge_pago(factura["metodo_pago"]) if factura else "—", cls="detail-value"), cls="detail-item"),
-                Div(Label("Estado de Pago"),  Div(badge_estado(factura["estado_pago"]) if factura else "—", cls="detail-value"), cls="detail-item"),
-                cls="detail-grid"
+            Table(
+                Thead(Tr(Th("Servicio"), Th("Precio"))),
+                Tbody(
+                    *[Tr(Td(s["item"]), Td(f"S/. {s['precio']:.2f}")) for s in servicios_cotizacion]
+                ) if servicios_cotizacion else Tbody(Tr(Td("Sin servicios registrados.", colspan="2", cls="no-data"))),
             ),
-            style="margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid var(--border);"
+            cls="table-wrap"
+        ),
+        Div(style="margin-top:1rem;"),
+        Div(
+            Span("Total Servicios:", cls="text-muted text-sm"),
+            Span(f"S/. {sum(s['precio'] for s in servicios_cotizacion):.2f}", style="font-size:1.1rem;font-weight:700;color:var(--accent);"),
+            cls="flex gap-2", style="justify-content:flex-end;align-items:center;"
         ),
         cls="card-body"
     )
 
-    if bitacora:
-        sintomas = bitacora.get("sintomas", [])
-        codigos  = bitacora.get("codigo_OBD", [])
-        seccion_mongo_bit = Div(
-            Div(H2(I(cls="fa-solid fa-book-open"), " Bitácora de Diagnóstico"), Span("MongoDB", cls="db-tag mongo"), style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;"),
-            Div(
-                Div(Label("Cod Diagnóstico"),    Div(bitacora.get("codigoDiagnostico","—"), cls="detail-value font-mono"), cls="detail-item"),
-                Div(Label("Emp ID"),             Div(str(bitacora.get("idEmpleado","—")), cls="detail-value"), cls="detail-item"),
-                Div(Label("Cod Especificación"), Div(bitacora.get("codigoEspecificacion","—"), cls="detail-value font-mono"), cls="detail-item"),
-                cls="detail-grid"
+    def _item_bitacora(b, abierto=False):
+        sintomas = b.get("sintomas", [])
+        codigos  = b.get("codigo_OBD", [])
+        codigo_diag = b.get("codigoDiagnostico", "—")
+        return Details(
+            Summary(
+                I(cls="fa-solid fa-chevron-right acordeon-icon"),
+                Span(f" Diagnóstico {codigo_diag}", style="font-weight:600;"),
+                cls="acordeon-summary"
             ),
-            Div(style="margin-top:1rem;"),
-            Div(Span(I(cls="fa-solid fa-stethoscope"), " Síntomas", style="font-size:.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;"),
-                Div(*[Span(s, cls="tag") for s in sintomas], cls="tag-list mt-1") if sintomas else P("—", cls="text-muted text-sm mt-1"),
-                style="margin-bottom:1rem;"),
-            Div(Span(I(cls="fa-solid fa-triangle-exclamation"), " Códigos OBD", style="font-size:.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;"),
-                Div(*[Span(c, cls="tag-obd") for c in codigos], cls="tag-list mt-1") if codigos else P("Sin códigos OBD.", cls="text-muted text-sm mt-1"),
-                style="margin-bottom:1rem;"),
-            Div(Span(I(cls="fa-solid fa-file-lines"), " Observaciones", style="font-size:.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;"),
-                P(bitacora.get("observaciones","—"), style="margin-top:.4rem;color:var(--text-secondary);font-size:.875rem;line-height:1.6;")),
+            Div(
+                Div(
+                    Div(Label("Cod Diagnóstico"),    Div(codigo_diag, cls="detail-value font-mono"), cls="detail-item"),
+                    Div(Label("Emp ID"),             Div(str(b.get("idEmpleado","—")), cls="detail-value"), cls="detail-item"),
+                    Div(Label("Cod Especificación"), Div(b.get("codigoEspecificacion","—"), cls="detail-value font-mono"), cls="detail-item"),
+                    cls="detail-grid"
+                ),
+                Div(style="margin-top:1rem;"),
+                Div(Span(I(cls="fa-solid fa-stethoscope"), " Síntomas", style="font-size:.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;"),
+                    Div(*[Span(s, cls="tag") for s in sintomas], cls="tag-list mt-1") if sintomas else P("—", cls="text-muted text-sm mt-1"),
+                    style="margin-bottom:1rem;"),
+                Div(Span(I(cls="fa-solid fa-triangle-exclamation"), " Códigos OBD", style="font-size:.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;"),
+                    Div(*[Span(c, cls="tag-obd") for c in codigos], cls="tag-list mt-1") if codigos else P("Sin códigos OBD.", cls="text-muted text-sm mt-1"),
+                    style="margin-bottom:1rem;"),
+                Div(Span(I(cls="fa-solid fa-file-lines"), " Observaciones", style="font-size:.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;"),
+                    P(b.get("observaciones","—"), style="margin-top:.4rem;color:var(--text-secondary);font-size:.875rem;line-height:1.6;")),
+                cls="acordeon-body"
+            ),
+            open=abierto,
+            cls="acordeon-item"
+        )
+
+    if bitacoras_vehiculo:
+        seccion_mongo_bit = Div(
+            Div(H2(I(cls="fa-solid fa-book-open"), f" Bitácoras de Diagnóstico ({len(bitacoras_vehiculo)})"), style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;"),
+            Div(
+                *[_item_bitacora(b, abierto=(i == 0)) for i, b in enumerate(bitacoras_vehiculo)],
+                cls="acordeon-lista"
+            ),
         )
     else:
         seccion_mongo_bit = Div(
-            Div(H2(I(cls="fa-solid fa-book-open"), " Bitácora de Diagnóstico"), Span("MongoDB", cls="db-tag mongo"), style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;"),
-            Div(I(cls="fa-solid fa-triangle-exclamation"), " Esta orden no tiene bitácora registrada en MongoDB.", cls="alert alert-warning"),
+            Div(H2(I(cls="fa-solid fa-book-open"), " Bitácoras de Diagnóstico"), style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;"),
+            Div(I(cls="fa-solid fa-triangle-exclamation"), " Este vehículo no tiene bitácoras registradas.", cls="alert alert-warning"),
         )
 
     if esp_tecnica:
         det_tec = esp_tecnica.get("detalles_tecnicos", {})
         seccion_mongo_esp = Div(
-            Div(H2(I(cls="fa-solid fa-gear"), " Especificaciones Técnicas"), Span("MongoDB", cls="db-tag mongo"), style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;"),
+            Div(H2(I(cls="fa-solid fa-gear"), " Especificaciones Técnicas"), style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;"),
             Div(
                 Div(Label("Cod Especificación"), Div(esp_tecnica.get("codigoEspecificacion","—"), cls="detail-value font-mono"), cls="detail-item"),
                 Div(Label("Marca / Modelo"),     Div(f"{esp_tecnica.get('marca','?')} / {esp_tecnica.get('modelo','?')}", cls="detail-value"), cls="detail-item"),
@@ -351,14 +375,23 @@ def render_reportes_detalle(req, datos):
     else:
         seccion_mongo_esp = Div(P(I(cls="fa-solid fa-circle-info"), " No se encontraron especificaciones técnicas en MongoDB.", cls="text-muted text-sm"))
 
+    IGV_TASA = 0.18
+    subtotal_servicios = sum(s["precio"] for s in servicios_cotizacion)
+    subtotal_general = total_rep + subtotal_servicios
+    igv = subtotal_general * IGV_TASA
+    total_facturado = subtotal_general + igv
+
     resumen = Div(
         Div(
-            Div(H2(I(cls="fa-solid fa-sack-dollar"), " Resumen de Costos"), Span("Oracle + MongoDB", cls="badge badge-orange"), cls="card-header"),
+            Div(H2(I(cls="fa-solid fa-sack-dollar"), " Resumen de Costos"), cls="card-header"),
             Div(
                 Div(
-                    Div(Label("Repuestos (Oracle)"),    Div(f"S/. {total_rep:.2f}", cls="detail-value"), cls="detail-item"),
-                    Div(Label("Mano de obra (MongoDB)"), Div(f"S/. {mano_obra:.2f}", cls="detail-value"), cls="detail-item"),
-                    Div(Label("GRAN TOTAL"),             Div(f"S/. {gran_total:.2f}", cls="detail-value", style="font-size:1.3rem;font-weight:700;color:var(--accent);"), cls="detail-item"),
+                    Div(Label("Total de Repuestos"), Div(f"S/. {total_rep:.2f}", cls="detail-value"), cls="detail-item"),
+                    Div(Label("Total de Servicios"), Div(f"S/. {subtotal_servicios:.2f}", cls="detail-value"), cls="detail-item"),
+                    Div(Label("IGV (18%)"),           Div(f"S/. {igv:.2f}", cls="detail-value"), cls="detail-item"),
+                    Div(Label("TOTAL FACTURADO"),     Div(f"S/. {total_facturado:.2f}", cls="detail-value", style="font-size:1.3rem;font-weight:700;color:var(--accent);"), cls="detail-item"),
+                    Div(Label("Método de Pago"),      Div(badge_pago(factura["metodo_pago"]) if factura else "—", cls="detail-value"), cls="detail-item"),
+                    Div(Label("Estado de Pago"),      Div(badge_estado(factura["estado_pago"]) if factura else "—", cls="detail-value"), cls="detail-item"),
                     cls="detail-grid"
                 ),
                 cls="card-body"
@@ -372,17 +405,16 @@ def render_reportes_detalle(req, datos):
         Div(
             Div(
                 H2(I(cls="fa-solid fa-chart-bar"), f" Reporte Integrado — Orden #{id_orden}"),
-                Div(Span("Oracle + MongoDB", cls="badge badge-orange"),
-                    A(I(cls="fa-solid fa-arrow-left"), " Volver", href="/reportes", cls="btn btn-secondary btn-sm"),
-                    cls="flex gap-1", style="align-items:center;"),
+                    Div(A(I(cls="fa-solid fa-arrow-left"), " Volver", href="/reportes", cls="btn btn-secondary btn-sm"),
+                                    cls="flex gap-1", style="align-items:center;"),
                 cls="card-header"
             ),
-            Div(P(I(cls="fa-solid fa-circle-info"), " Este reporte combina datos relacionales de Oracle con documentos de MongoDB, usando ",
-                  Strong("id_vehiculo"), " como campo puente entre ambas bases de datos.", cls="text-muted text-sm"), cls="card-body"),
+            Div(P(I(cls="fa-solid fa-circle-info"), " Este reporte integra la información completa de la orden usando ",
+                            Strong("id_vehiculo"), " como campo puente.", cls="text-muted text-sm"), cls="card-body"),
             cls="card mb-2"
         ),
-        Div(Div(Div(H2(I(cls="fa-solid fa-circle", style="color:#f00;font-size:.6rem;vertical-align:middle;"), " Fuente: Oracle Database"), cls="card-header"), seccion_oracle, cls="card fade-in mb-2")),
-        Div(Div(Div(H2(I(cls="fa-solid fa-circle", style="color:#0a0;font-size:.6rem;vertical-align:middle;"), " Fuente: MongoDB"), cls="card-header"), Div(seccion_mongo_bit, Div(style="border-top:1px solid var(--border);margin:1.25rem 0;"), seccion_mongo_esp, cls="card-body"), cls="card fade-in mb-2")),
+        Div(seccion_oracle, cls="card fade-in mb-2"),
+        Div(Div(seccion_mongo_bit, Div(style="border-top:1px solid var(--border);margin:1.25rem 0;"), seccion_mongo_esp, cls="card-body"), cls="card fade-in mb-2"),
         resumen,
         cls="page-body"
     )
