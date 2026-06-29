@@ -21,6 +21,7 @@ from auth import login, puede_acceder, registrar_accion
 from database import get_oracle_connection, get_mongo_connection
 import os
 from dotenv import load_dotenv
+load_dotenv()
 from starlette.datastructures import UploadFile
 
 FOTOS_PATH = os.getenv("FOTOS_VEHICULOS_PATH", "fotos_vehiculos")
@@ -44,7 +45,8 @@ from controllers.empleados_ctrl import (
 from controllers.ordenes_ctrl import (
     ctrl_ordenes_list, ctrl_ordenes_detalle, ctrl_ordenes_nueva, ctrl_ordenes_crear,
     ctrl_ordenes_editar, ctrl_ordenes_actualizar, ctrl_ordenes_cambiar_estado,
-    ctrl_ordenes_agregar_repuesto,
+    ctrl_ordenes_agregar_repuesto, ctrl_ordenes_cargar_cotizacion, ctrl_ordenes_imprimir,
+    ctrl_ordenes_quitar_repuesto,
 )
 from controllers.repuestos_ctrl import (
     ctrl_repuestos_list, ctrl_repuestos_nuevo, ctrl_repuestos_crear,
@@ -60,7 +62,8 @@ from controllers.usuarios_ctrl import (
 )
 from controllers.catalogo_ctrl import ctrl_catalogo_list, ctrl_catalogo_actualizar
 from controllers.bitacora_ctrl import (
-    ctrl_bitacora_list, ctrl_bitacora_nueva, ctrl_bitacora_crear, ctrl_bitacora_detalle
+    ctrl_bitacora_list, ctrl_bitacora_nueva, ctrl_bitacora_crear, ctrl_bitacora_detalle,
+    ctrl_bitacora_subir_fotos,
 )
 from controllers.reportes_ctrl import ctrl_reportes_list, ctrl_reportes_detalle
 
@@ -74,7 +77,6 @@ from controllers.proveedores_ctrl import (
 )
 from controllers import deps
 
-load_dotenv()
 
 # ═══════════════════════════════════════════════════════════════════════
 # Inicialización de la aplicación FastHTML
@@ -88,7 +90,6 @@ app, rt = fast_app(
     ),
     live=False,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # Middleware — verificar sesión en cada petición protegida
@@ -758,6 +759,20 @@ def post(req, id_orden: int, id_pieza: int, cantidad: int, precio_unitario: floa
     if not require_login(req): return RedirectResponse("/login", status_code=303)
     return ctrl_ordenes_agregar_repuesto(req, id_orden, id_pieza, cantidad, precio_unitario)
 
+@rt("/ordenes/cargar-cotizacion")
+def post(req, id_orden: int, codigo_cotizacion: str):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return ctrl_ordenes_cargar_cotizacion(req, id_orden, codigo_cotizacion)
+
+@rt("/ordenes/{id_orden}/imprimir")
+def get(req, id_orden: int):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return ctrl_ordenes_imprimir(req, id_orden)
+
+@rt("/ordenes/quitar-repuesto")
+def post(req, id_orden: int, id_detalle: int):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return ctrl_ordenes_quitar_repuesto(req, id_orden, id_detalle)
 
 # ═══════════════════════════════════════════════════════════════════════
 # REPUESTOS / INVENTARIO
@@ -893,11 +908,28 @@ def post(req, id_vehiculo: int, id_empleado: int, codigo_especificacion: str,
     return ctrl_bitacora_crear(req, id_vehiculo, id_empleado, codigo_especificacion,
                                sintomas, codigos_obd, observaciones)
 
-@rt("/bitacora/{id_orden}")
-def get(req, id_orden: int):
+@rt("/bitacora/diagnostico/{codigo_diagnostico}")
+def get(req, codigo_diagnostico: str):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
-    return ctrl_bitacora_detalle(req, id_orden)
+    return ctrl_bitacora_detalle(req, codigo_diagnostico)
 
+@rt("/bitacora/diagnostico/{codigo_diagnostico}/fotos")
+async def post(req, codigo_diagnostico: str):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return await ctrl_bitacora_subir_fotos(req, codigo_diagnostico)
+
+@rt("/bitacora/foto/{ruta:path}")
+def get(req, ruta: str):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    from starlette.responses import FileResponse, Response
+    ruta_norm = ruta.replace("/", os.sep).replace("\\", os.sep)
+    base = os.path.abspath(os.getenv("FOTOS_VEHICULOS_PATH", "fotos_vehiculos"))
+    destino = os.path.abspath(os.path.join(base, ruta_norm))
+    if not destino.startswith(base):
+        return Response("Ruta no válida", status_code=400)
+    if not os.path.isfile(destino):
+        return Response(f"No encontrado: {destino}", status_code=404)
+    return FileResponse(destino)
 
 # ═══════════════════════════════════════════════════════════════════════
 # REPORTES COMBINADOS (Oracle + MongoDB)
@@ -1001,6 +1033,10 @@ def post(req, codigo: str, nombre_empresa: str, lineas_raw: str, telefono: str, 
     if not require_login(req): return RedirectResponse("/login", status_code=303)
     return ctrl_proveedores_actualizar(req, codigo, nombre_empresa, lineas_raw, telefono, email)
 
+@rt("/test-foto")
+def get(req):
+    from starlette.responses import Response
+    return Response("FUNCIONA", status_code=200)
 
 # ═══════════════════════════════════════════════════════════════════════
 # Punto de entrada

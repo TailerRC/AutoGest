@@ -7,6 +7,34 @@ import json
 from fasthtml.common import *
 from auth import puede_acceder
 from .helpers import layout, badge_estado
+from datetime import date
+
+hoy = date.today().strftime("%Y-%m-%d")
+# ── Catálogo fijo de servicios de taller (mano de obra) ────────────────
+# Vive en código, no en base de datos: son precios estándar del taller,
+# no inventario físico. Se puede editar libremente aquí.
+SERVICIOS_TALLER = {
+    "Cambio de Aceite y Filtro":            80.00,
+    "Mantenimiento Menor (10,000 km)":      150.00,
+    "Mantenimiento Mayor (40,000 km)":      450.00,
+    "Alineamiento y Balanceo":              90.00,
+    "Cambio de Pastillas de Freno":         60.00,
+    "Cambio de Discos de Freno":            120.00,
+    "Purga de Sistema de Frenos":           70.00,
+    "Cambio de Correa de Distribución":     250.00,
+    "Cambio de Batería (Mano de Obra)":     30.00,
+    "Diagnóstico Computarizado (Escáner)":  50.00,
+    "Cambio de Bujías":                     45.00,
+    "Cambio de Filtro de Aire":             25.00,
+    "Cambio de Filtro de Combustible":      40.00,
+    "Revisión y Recarga de Aire Acondicionado": 110.00,
+    "Cambio de Amortiguadores (par)":       180.00,
+    "Cambio de Líquido de Transmisión":     130.00,
+    "Reparación de Sistema de Embrague":    320.00,
+    "Cambio de Llantas (mano de obra, 4)":  60.00,
+    "Lavado y Encerado General":            45.00,
+    "Revisión Pre-Técnica (Checklist 30 puntos)": 35.00,
+}
 
 def render_cotizaciones_list(req, usuario, cotizaciones, q="", estado="todos", orden="fecha_desc", page=1, total_pages=1, total_count=0):
     """
@@ -260,119 +288,268 @@ def render_cotizaciones_list(req, usuario, cotizaciones, q="", estado="todos", o
         contenido
     )
 
-def render_cotizaciones_nueva(req, clientes, vehiculos):
+def render_cotizaciones_nueva(req, clientes, vehiculos, repuestos=None, bitacoras=None):
     """
     Renderiza la vista del formulario dinámico de nueva cotización.
+    Cascada Cliente -> Vehículo -> Diagnósticos, todo resuelto vía JS sin recargar
+    (los datos completos se mandan una sola vez al navegador).
     """
     error = req.query_params.get("error", "")
     alert = Div(I(cls="fa-solid fa-circle-exclamation"), f" {error}", cls="alert alert-error") if error else ""
 
-    opts_c = [Option(f"{c['nombre']} ({c['dni']})", value=str(c["id_cliente"])) for c in clientes]
-    opts_v = [Option(f"#{v['id_vehiculo']} — {v.get('marca','')} {v.get('modelo','')} ({v.get('placa','')})", value=str(v["id_vehiculo"])) for v in vehiculos]
+    repuestos = repuestos or []
+    bitacoras = bitacoras or []
 
-    # Formulario dinámico multilínea en JavaScript
-    js_script = Script("""
+    opts_c = [Option(f"{c['nombre']} ({c['dni']})", value=str(c["id_cliente"])) for c in clientes]
+
+    # Mapa idCliente -> lista de vehículos de ese cliente (para la cascada en JS)
+    vehiculos_por_cliente = {}
+    for v in vehiculos:
+        vehiculos_por_cliente.setdefault(str(v["id_cliente"]), []).append({
+            "id_vehiculo": v["id_vehiculo"],
+            "label": f"#{v['id_vehiculo']} — {v.get('marca','')} {v.get('modelo','')} ({v.get('placa','')})"
+        })
+
+    # Mapa idVehiculo -> lista de bitácoras de diagnóstico de ese vehículo
+    bitacoras_por_vehiculo = {}
+    for b in bitacoras:
+        bitacoras_por_vehiculo.setdefault(str(b.get("idVehiculo","")), []).append({
+            "codigoDiagnostico": b.get("codigoDiagnostico","—"),
+            "codigoEspecificacion": b.get("codigoEspecificacion","—"),
+            "sintomas": b.get("sintomas", []),
+            "codigo_OBD": b.get("codigo_OBD", []),
+            "observaciones": b.get("observaciones", "—"),
+        })
+
+    # Mapa de repuestos del inventario: id_pieza -> {nombre, precio}
+    repuestos_dict = {
+        str(r["id_pieza"]): {"nombre": r["nombre"], "precio": r["precio_venta"], "stock": r["stock"]}
+        for r in repuestos
+    }
+    opts_r = [Option(f"{r['nombre']} (Stock: {r['stock']})", value=str(r["id_pieza"])) for r in repuestos]
+
+    opts_s = [Option(nombre, value=nombre) for nombre in SERVICIOS_TALLER.keys()]
+
+    js_script = Script(f"""
+        const serviciosData   = {json.dumps(SERVICIOS_TALLER)};
+        const repuestosData   = {json.dumps(repuestos_dict)};
+        const vehiculosPorCliente = {json.dumps(vehiculos_por_cliente)};
+        const bitacorasPorVehiculo = {json.dumps(bitacoras_por_vehiculo)};
+
         let items = [];
 
-        function renderItems() {
+        // ── Cascada Cliente -> Vehículo ─────────────────────────────
+        function onClienteChange(idCliente) {{
+            const selVeh = document.getElementById('select-vehiculo');
+            const panelDiag = document.getElementById('panel-diagnosticos');
+            selVeh.innerHTML = '';
+            panelDiag.innerHTML = '';
+
+            const lista = vehiculosPorCliente[idCliente] || [];
+            if (lista.length === 0) {{
+                selVeh.appendChild(new Option('-- Este cliente no tiene vehículos --', ''));
+                return;
+            }}
+            selVeh.appendChild(new Option('-- Seleccionar Vehículo --', ''));
+            lista.forEach(v => {{
+                selVeh.appendChild(new Option(v.label, v.id_vehiculo));
+            }});
+        }}
+
+        // ── Panel de Diagnósticos al elegir Vehículo ────────────────
+        function onVehiculoChange(idVehiculo) {{
+            const panelDiag = document.getElementById('panel-diagnosticos');
+            const lista = bitacorasPorVehiculo[idVehiculo] || [];
+
+            if (!idVehiculo) {{
+                panelDiag.innerHTML = '';
+                return;
+            }}
+            if (lista.length === 0) {{
+                panelDiag.innerHTML = '<div class="alert alert-info"><i class="fa-solid fa-circle-info"></i> Este vehículo no tiene diagnósticos registrados en bitácora.</div>';
+                return;
+            }}
+
+            let html = '<div class="diagnosticos-panel"><div class="diagnosticos-panel-header"><i class="fa-solid fa-stethoscope"></i> Diagnósticos registrados (' + lista.length + ')</div>';
+            lista.forEach(b => {{
+                const sintomasHtml = (b.sintomas || []).map(s => '<span class="tag">' + s + '</span>').join('');
+                const obdHtml = (b.codigo_OBD || []).map(c => '<span class="tag-obd">' + c + '</span>').join('');
+                html += '<div class="diagnostico-item">' +
+                    '<div class="diagnostico-item-header">' +
+                        '<span class="badge badge-gray font-mono">' + b.codigoDiagnostico + '</span>' +
+                        '<span class="badge badge-blue font-mono">' + b.codigoEspecificacion + '</span>' +
+                    '</div>' +
+                    '<div class="diagnostico-field">' +
+                        '<span class="diagnostico-field-label">Síntomas</span>' +
+                        '<div class="tag-list mt-1">' + (sintomasHtml || '<span class="text-muted text-sm">Sin síntomas registrados.</span>') + '</div>' +
+                    '</div>' +
+                    '<div class="diagnostico-field">' +
+                        '<span class="diagnostico-field-label">Códigos OBD</span>' +
+                        '<div class="tag-list mt-1">' + (obdHtml || '<span class="text-muted text-sm">Sin códigos OBD.</span>') + '</div>' +
+                    '</div>' +
+                    '<div class="diagnostico-field">' +
+                        '<span class="diagnostico-field-label">Observaciones</span>' +
+                        '<p class="diagnostico-obs">' + (b.observaciones || '—') + '</p>' +
+                    '</div>' +
+                '</div>';
+            }});
+            html += '</div>';
+            panelDiag.innerHTML = html;
+        }}
+
+        // ── Autocompletar precio de Servicio ────────────────────────
+        function onServicioChange(nombre) {{
+            const precioInput = document.getElementById('servicio_precio');
+            precioInput.value = nombre ? serviciosData[nombre].toFixed(2) : '';
+        }}
+
+        function addServicio() {{
+            const sel = document.getElementById('servicio_select');
+            const nombre = sel.value;
+            if (!nombre) {{
+                alert('Selecciona un servicio.');
+                return;
+            }}
+            items.push({{ item: nombre, precio: serviciosData[nombre] }});
+            sel.value = '';
+            document.getElementById('servicio_precio').value = '';
+            renderItems();
+        }}
+
+        // ── Autocompletar precio de Repuesto (desde Oracle) ─────────
+        function onRepuestoChange(idPieza) {{
+            const precioInput = document.getElementById('repuesto_precio_unit');
+            precioInput.value = idPieza ? repuestosData[idPieza].precio.toFixed(2) : '';
+        }}
+
+        function addRepuesto() {{
+            const sel = document.getElementById('repuesto_select');
+            const idPieza = sel.value;
+            const cantidad = parseInt(document.getElementById('repuesto_cantidad').value, 10);
+
+            if (!idPieza) {{
+                alert('Selecciona un repuesto.');
+                return;
+            }}
+            if (!cantidad || cantidad < 1) {{
+                alert('Ingresa una cantidad válida (mínimo 1).');
+                return;
+            }}
+            const rep = repuestosData[idPieza];
+            if (cantidad > rep.stock) {{
+                alert('Stock insuficiente. Disponible: ' + rep.stock + ', solicitado: ' + cantidad + '.');
+                return;
+            }}
+            const costoTotal = rep.precio * cantidad;
+            items.push({{ item: rep.nombre, precio: costoTotal }});
+
+            sel.value = '';
+            document.getElementById('repuesto_precio_unit').value = '';
+            document.getElementById('repuesto_cantidad').value = '1';
+            renderItems();
+        }}
+
+        // ── Tabla de ítems agregados (servicios + repuestos juntos) ─
+        function renderItems() {{
             const tbody = document.getElementById('items-tbody');
             tbody.innerHTML = '';
             let total = 0;
-            
-            if (items.length === 0) {
+
+            if (items.length === 0) {{
                 tbody.innerHTML = '<tr><td colspan="3" class="no-data" style="text-align:center; padding:1.5rem; color:var(--text-muted);">No se han agregado servicios o repuestos a la cotización.</td></tr>';
-            } else {
-                items.forEach((item, index) => {
+            }} else {{
+                items.forEach((item, index) => {{
                     total += item.precio;
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
-                        <td style="font-weight:500;">${item.item}</td>
-                        <td style="font-weight:600; color:var(--text-primary);">S/. ${item.precio.toFixed(2)}</td>
+                        <td style="font-weight:500;">${{item.item}}</td>
+                        <td style="font-weight:600; color:var(--text-primary);">S/. ${{item.precio.toFixed(2)}}</td>
                         <td style="text-align:center;">
-                            <button type="button" class="btn btn-sm btn-danger" onclick="removeItem(${index})" style="padding:0.3rem 0.6rem; font-size:0.75rem;">
+                            <button type="button" class="btn btn-sm btn-danger" onclick="removeItem(${{index}})" style="padding:0.3rem 0.6rem; font-size:0.75rem;">
                                 <i class="fa-solid fa-trash"></i>
                             </button>
                         </td>
                     `;
                     tbody.appendChild(tr);
-                });
-            }
-            
+                }});
+            }}
+
             document.getElementById('items_json').value = JSON.stringify(items);
             document.getElementById('total').value = total;
             document.getElementById('total-display').innerText = 'S/. ' + total.toFixed(2);
-        }
+        }}
 
-        function addItem() {
-            const itemInput = document.getElementById('item_input');
-            const precioInput = document.getElementById('precio_input');
-            const itemValue = itemInput.value.trim();
-            const precioValue = parseFloat(precioInput.value);
-            
-            if (!itemValue) {
-                alert('Por favor, ingresa una descripción para el ítem.');
-                itemInput.focus();
-                return;
-            }
-            if (isNaN(precioValue) || precioValue < 0) {
-                alert('Por favor, ingresa un precio unitario válido mayor o igual a 0.');
-                precioInput.focus();
-                return;
-            }
-            
-            items.push({ item: itemValue, precio: precioValue });
-            itemInput.value = '';
-            precioInput.value = '';
-            renderItems();
-            itemInput.focus();
-        }
-
-        function removeItem(index) {
+        function removeItem(index) {{
             items.splice(index, 1);
             renderItems();
-        }
+        }}
 
-        function validarFormulario(event) {
-            if (items.length === 0) {
+        function validarFormulario(event) {{
+            if (items.length === 0) {{
                 alert('Debes agregar al menos un servicio o repuesto para poder generar la cotización.');
                 event.preventDefault();
                 return false;
-            }
+            }}
             return true;
-        }
+        }}
 
-        window.addEventListener('DOMContentLoaded', () => {
+        window.addEventListener('DOMContentLoaded', () => {{
             renderItems();
-            
-            document.getElementById('precio_input').addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    addItem();
-                }
-            });
-            document.getElementById('item_input').addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    addItem();
-                }
-            });
-        });
+        }});
     """)
-
+    
     form = Form(
         alert,
-        js_script,
         Div(
-            Div(Label("Cliente"), Select(Option("-- Seleccionar Cliente --", value=""), *opts_c, name="id_cliente", required=True), cls="form-group"),
-            Div(Label("Vehículo"), Select(Option("-- Seleccionar Vehículo --", value=""), *opts_v, name="id_vehiculo", required=True), cls="form-group"),
-            Div(Label("Fecha de Validez"), Input(name="fecha_validez", type="date", required=True), cls="form-group"),
+            Div(Label("Cliente"),
+                Select(Option("-- Seleccionar Cliente --", value=""), *opts_c, name="id_cliente",
+                       id="select-cliente", required=True, onchange="onClienteChange(this.value)"),
+                cls="form-group"),
+            Div(Label("Vehículo"),
+                Select(Option("-- Primero selecciona un cliente --", value=""), name="id_vehiculo",
+                       id="select-vehiculo", required=True, onchange="onVehiculoChange(this.value)"),
+                cls="form-group"),
+            Div(Label("Fecha de Validez"),
+                Input(name="fecha_validez", type="date", min=hoy, required=True),
+                cls="form-group"),
             cls="form-grid"
         ),
+        Div(id="panel-diagnosticos", style="margin-top:1rem;"),
         H3("Servicios y Repuestos de la Cotización", style="font-size:1rem; margin-top:1.5rem; margin-bottom:0.5rem; border-top:1px solid var(--border); padding-top:1.5rem;"),
+
+        # ── Bloque: agregar Servicio (catálogo fijo de mano de obra) ──
         Div(
-            Div(Label("Descripción del Servicio o Repuesto"), Input(id="item_input", placeholder="Ej: Cambio de Aceite Sintético"), cls="form-group"),
-            Div(Label("Precio Unitario (S/.)"), Input(id="precio_input", type="number", min="0", step="0.01", placeholder="0.00"), cls="form-group"),
-            Div(Label(style="visibility:hidden;"), Button(I(cls="fa-solid fa-plus"), " Agregar", type="button", onclick="addItem()", cls="btn btn-primary", style="margin-top:auto;"), cls="form-group"),
+            Div(Label("Servicio de Taller"),
+                Select(Option("-- Seleccionar Servicio --", value=""), *opts_s,
+                       id="servicio_select", onchange="onServicioChange(this.value)"),
+                cls="form-group"),
+            Div(Label("Precio (S/.)"),
+                Input(id="servicio_precio", type="number", step="0.01", readonly=True, placeholder="0.00"),
+                cls="form-group"),
+            Div(Label(style="visibility:hidden;"),
+                Button(I(cls="fa-solid fa-plus"), " Agregar Servicio", type="button",
+                       onclick="addServicio()", cls="btn btn-blue", style="margin-top:auto;"),
+                cls="form-group"),
+            cls="form-grid",
+            style="margin-bottom:.85rem; align-items:flex-end;"
+        ),
+
+        # ── Bloque: agregar Repuesto (inventario real de Oracle) ──────
+        Div(
+            Div(Label("Repuesto del Inventario"),
+                Select(Option("-- Seleccionar Repuesto --", value=""), *opts_r,
+                       id="repuesto_select", onchange="onRepuestoChange(this.value)"),
+                cls="form-group"),
+            Div(Label("Precio Unitario (S/.)"),
+                Input(id="repuesto_precio_unit", type="number", step="0.01", readonly=True, placeholder="0.00"),
+                cls="form-group"),
+            Div(Label("Cantidad"),
+                Input(id="repuesto_cantidad", type="number", min="1", step="1", value="1"),
+                cls="form-group"),
+            Div(Label(style="visibility:hidden;"),
+                Button(I(cls="fa-solid fa-plus"), " Agregar Repuesto", type="button",
+                       onclick="addRepuesto()", cls="btn btn-primary", style="margin-top:auto;"),
+                cls="form-group"),
             cls="form-grid",
             style="margin-bottom:1rem; align-items:flex-end;"
         ),
@@ -405,6 +582,7 @@ def render_cotizaciones_nueva(req, clientes, vehiculos):
             Div(form, cls="card-body"),
             cls="card fade-in"
         ),
+        js_script,
         cls="page-body"
     )
     return layout(req, "Nueva Cotización", "Nueva Cotización", "", contenido)

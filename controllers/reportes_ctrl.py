@@ -21,8 +21,8 @@ def ctrl_reportes_list(req):
     from database import OracleDB
     db = OracleDB()
     mecanicos = db.get_reporte_mecanicos()
-    
-    return render_reportes_list(req, ordenes, logs, resumen, mecanicos)
+    usuarios = deps.usuarios.listar()
+    return render_reportes_list(req, ordenes, logs, resumen, mecanicos, usuarios=usuarios)
 
 
 def ctrl_reportes_detalle(req):

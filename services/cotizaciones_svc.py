@@ -103,3 +103,30 @@ class CotizacionesService:
             
         return self._repo.create(codigo, int(id_cliente), int(id_vehiculo),
                                  fecha_dt, cleaned_servicios, calculated_total)
+    
+    def listar_vigentes_por_vehiculo(self, id_vehiculo: int) -> List[Dict]:
+        """
+        Retorna las cotizaciones de un vehículo cuya fecha_validez aún no venció,
+        ordenadas de la más reciente a la más antigua (por código de cotización).
+        La más reciente (primera de la lista) es la que se considera "la actual"
+        para efectos de carga en una orden.
+        """
+        hoy = datetime.now()
+        todas = self._repo.get_all()
+        resultado = []
+        for c in todas:
+            if c.get("idVehiculo") != id_vehiculo:
+                continue
+            fecha_val = c.get("fecha_validez")
+            if hasattr(fecha_val, "date"):
+                vence = fecha_val
+            else:
+                try:
+                    vence = datetime.strptime(str(fecha_val)[:10], "%Y-%m-%d")
+                except Exception:
+                    continue
+            if vence >= hoy:
+                resultado.append(c)
+
+        resultado.sort(key=lambda c: c.get("codigoCotizacion", ""), reverse=True)
+        return resultado

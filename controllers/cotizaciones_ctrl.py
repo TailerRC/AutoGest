@@ -145,7 +145,18 @@ def ctrl_cotizaciones_nueva(req):
         return no_perm(req)
     clientes = deps.clientes.listar()
     vehiculos = deps.vehiculos.listar()
-    return render_cotizaciones_nueva(req, clientes, vehiculos)
+    repuestos = deps.repuestos.listar()
+    bitacoras = deps.bitacora.listar()
+
+    # VW_VEHICULOS no expone id_cliente (solo nombre_cliente), así que lo
+    # reconstruimos consultando cada vehículo individualmente (get_by_id sí
+    # devuelve id_cliente, según VEHICULOS directo en database.py).
+    for v in vehiculos:
+        if "id_cliente" not in v:
+            detalle = deps.vehiculos.obtener(v["id_vehiculo"])
+            v["id_cliente"] = detalle["id_cliente"] if detalle else None
+
+    return render_cotizaciones_nueva(req, clientes, vehiculos, repuestos, bitacoras)
 
 
 def ctrl_cotizaciones_crear(req, id_cliente: int, id_vehiculo: int,

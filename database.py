@@ -50,7 +50,7 @@ class OracleDB:
     def get_all_clientes(self) -> List[Dict]:
         conn = self._get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id_cliente, nombre, telefono, dni, email FROM CLIENTES ORDER BY id_cliente")
+        cursor.execute("SELECT id_cliente, nombre, telefono, dni, email FROM CLIENTES ORDER BY id_cliente DESC")
         result = self._rows_to_dicts(cursor)
         cursor.close()
         conn.close()
@@ -314,7 +314,51 @@ class OracleDB:
         cursor.close()
         conn.close()
         return actualizado
+    
+    def get_detalle_orden_by_id(self, id_detalle: int) -> Optional[Dict]:
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT d.id_detalle, d.id_orden, d.id_pieza, d.cantidad, d.precio_unitario,
+                r.nombre AS nombre_pieza
+            FROM DETALLE_ORDEN_REPUESTOS d
+            JOIN INVENTARIO_REPUESTOS r ON d.id_pieza = r.id_pieza
+            WHERE d.id_detalle = :1
+        """, [id_detalle])
+        rows = self._rows_to_dicts(cursor)
+        cursor.close()
+        conn.close()
+        return rows[0] if rows else None
 
+    def delete_detalle_orden(self, id_detalle: int) -> bool:
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        # Recuperar cantidad e id_pieza antes de borrar, para devolver el stock
+        cursor.execute(
+            "SELECT id_pieza, cantidad FROM DETALLE_ORDEN_REPUESTOS WHERE id_detalle = :1",
+            [id_detalle]
+        )
+        fila = cursor.fetchone()
+        if not fila:
+            cursor.close()
+            conn.close()
+            return False
+        id_pieza, cantidad = fila
+
+        cursor.execute("DELETE FROM DETALLE_ORDEN_REPUESTOS WHERE id_detalle = :1", [id_detalle])
+        eliminado = cursor.rowcount > 0
+
+        if eliminado:
+            cursor.execute(
+                "UPDATE INVENTARIO_REPUESTOS SET stock = stock + :1 WHERE id_pieza = :2",
+                [cantidad, id_pieza]
+            )
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return eliminado
+    
     # ── REPUESTOS ─────────────────────────────────────────────────────
     def get_all_repuestos(self) -> List[Dict]:
         conn = self._get_connection()
@@ -379,8 +423,8 @@ class OracleDB:
         cursor = conn.cursor()
         cursor.execute("""
             SELECT d.id_detalle, d.id_orden, d.id_pieza, d.cantidad, d.precio_unitario,
-                   r.nombre AS nombre_pieza,
-                   (d.cantidad * d.precio_unitario) AS subtotal
+                r.nombre AS nombre_pieza, r.codigo AS codigo_pieza,
+                (d.cantidad * d.precio_unitario) AS subtotal
             FROM DETALLE_ORDEN_REPUESTOS d
             JOIN INVENTARIO_REPUESTOS r ON d.id_pieza = r.id_pieza
             WHERE d.id_orden = :1
@@ -632,10 +676,18 @@ class MongoDB:
     def get_bitacora_by_vehiculo(self, id_vehiculo: int) -> Optional[Dict]:
         return self._remove_id_single(self.bitacora.find_one({"idVehiculo": id_vehiculo}))
 
+    def get_bitacora_by_codigo(self, codigo_diagnostico: str) -> Optional[Dict]:
+        return self._remove_id_single(self.bitacora.find_one({"codigoDiagnostico": codigo_diagnostico}))
+
+    def get_bitacoras_by_vehiculo_all(self, id_vehiculo: int) -> List[Dict]:
+        return self._remove_id(list(self.bitacora.find({"idVehiculo": id_vehiculo})))
+
     def create_bitacora(self, id_vehiculo: int, id_empleado: int, codigo_especificacion: str,
                         sintomas: List[str], codigos_obd: List[str], observaciones: str) -> Dict:
+        total = self.bitacora.count_documents({})
+        codigo = f"DIAG-{total + 1:03d}"
         nuevo = {
-            "codigoDiagnostico": str(uuid.uuid4()),
+            "codigoDiagnostico": codigo,
             "idVehiculo": id_vehiculo,
             "idEmpleado": id_empleado,
             "codigoEspecificacion": codigo_especificacion,
@@ -643,10 +695,20 @@ class MongoDB:
             "codigo_OBD": codigos_obd,
             "fotografias_url": [],
             "observaciones": observaciones,
-            "fecha": datetime.now()
         }
         self.bitacora.insert_one(nuevo)
         return self._remove_id_single(nuevo)
+    
+    def agregar_fotos_bitacora(self, codigo_diagnostico: str, urls: List[str]) -> bool:
+        """
+        Agrega URLs de fotos al array fotografias_url de una bitácora existente,
+        identificada por su codigoDiagnostico (único).
+        """
+        result = self.bitacora.update_one(
+            {"codigoDiagnostico": codigo_diagnostico},
+            {"$push": {"fotografias_url": {"$each": urls}}}
+        )
+        return result.modified_count > 0
 
     # ── HISTORIAL DE MANTENIMIENTO ────────────────────────────────────
     def get_all_historial(self) -> List[Dict]:
