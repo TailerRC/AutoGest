@@ -217,13 +217,26 @@ def get(req):
     pendiente_cobro = sum(f["total"] for f in facturas if f["estado_pago"] == "pendiente")
     pagado_total     = sum(f["total"] for f in facturas if f["estado_pago"] == "pagada")
     
-    # Órdenes por mecánico (para el gráfico de barras)
+    # Órdenes por mecánico (agrupación TOP 5 + Otros para optimizar visualización en el dashboard)
     conteo_mecanico = {}
     for o in ordenes:
         nombre = o.get("nombre_empleado", "Sin asignar")
         conteo_mecanico[nombre] = conteo_mecanico.get(nombre, 0) + 1
-    mecanicos_labels = list(conteo_mecanico.keys())
-    mecanicos_data   = list(conteo_mecanico.values())
+    
+    # Ordenar de forma descendente por número de órdenes
+    mecanicos_ordenados = sorted(conteo_mecanico.items(), key=lambda x: x[1], reverse=True)
+    
+    # Si hay más de 7 mecánicos, mostramos el TOP 5 y agrupamos el resto en "Otros"
+    if len(mecanicos_ordenados) > 7:
+        top_mecanicos = mecanicos_ordenados[:5]
+        otros_mecanicos = mecanicos_ordenados[5:]
+        suma_otros = sum(cant for _, cant in otros_mecanicos)
+        
+        mecanicos_labels = [nombre for nombre, _ in top_mecanicos] + ["Otros"]
+        mecanicos_data   = [cant for _, cant in top_mecanicos] + [suma_otros]
+    else:
+        mecanicos_labels = [nombre for nombre, _ in mecanicos_ordenados]
+        mecanicos_data   = [cant for _, cant in mecanicos_ordenados]
 
     # Stock crítico por repuesto (para el gráfico de barras horizontal)
     repuestos_criticos_chart = deps.repuestos.listar_criticos()[:8]
@@ -362,7 +375,7 @@ def get(req):
                 cls="card"
             ),
             Div(
-                Div(H2(I(cls="fa-solid fa-user-gear"), " Órdenes por Mecánico"), cls="card-header"),
+                Div(H2(I(cls="fa-solid fa-users-gear"), " Órdenes por Mecánico"), cls="card-header"),
                 Div(
                     Div(
                         Canvas(id="chartMecanicos", role="img",
@@ -415,17 +428,16 @@ def get(req):
 
     chart_script = Script(f"""
     (function() {{
-        const colorBorgona = '#7A0C11';
-        const colorIndigo  = '#4A2E80';
-        const colorAzul    = '#3B82F6';
-        const colorCian    = '#06B6D4';
-        const colorVerde   = '#10B981';
-        const colorAmbar   = '#F59E0B';
-        const colorRojo    = '#EF4444';
-        const colorTeal    = '#0d9488';
-        const paletaDonut  = [colorBorgona, colorIndigo, colorAzul, colorCian, colorVerde, colorAmbar, colorRojo, colorTeal];
+        const colorBorgona  = '#7A0C11';
+        const colorAzul      = '#3B82F6';
+        const colorVerde     = '#10B981';
+        const colorNaranja   = '#F97316';
+        const colorMorado    = '#8B5CF6';
+        const colorTurquesa  = '#06B6D4';
+        const colorGris      = '#6B7280';
+        const paletaUnica    = [colorBorgona, colorAzul, colorVerde, colorNaranja, colorMorado, colorTurquesa, colorGris];
 
-        function crearLeyenda(contenedorId, labels, data, sufijo) {{
+        function crearLeyenda(contenedorId, labels, data, colores, sufijo) {{
             const cont = document.getElementById(contenedorId);
             if (!cont) return;
             cont.innerHTML = '';
@@ -434,7 +446,7 @@ def get(req):
                 item.className = 'chart-legend-item';
                 const dot = document.createElement('span');
                 dot.className = 'dot';
-                dot.style.background = paletaDonut[i % paletaDonut.length];
+                dot.style.background = colores[i % colores.length];
                 const lbl = document.createElement('span');
                 lbl.className = 'legend-label';
                 lbl.textContent = label;
@@ -452,13 +464,14 @@ def get(req):
         // 1. Órdenes por estado (dona)
         const estadosLabels = ['Pendiente', 'En Proceso', 'Completada', 'Cancelada'];
         const estadosData = [{pendientes}, {en_proceso}, {completadas}, {canceladas}];
+        const coloresEstados = [colorNaranja, colorAzul, colorVerde, colorGris];
         new Chart(document.getElementById('chartEstados'), {{
             type: 'doughnut',
             data: {{
                 labels: estadosLabels,
                 datasets: [{{
                     data: estadosData,
-                    backgroundColor: [colorAmbar, colorAzul, colorVerde, colorRojo],
+                    backgroundColor: coloresEstados,
                     borderWidth: 2,
                     borderColor: '#ffffff'
                 }}]
@@ -469,18 +482,19 @@ def get(req):
                 plugins: {{ legend: {{ display: false }} }}
             }}
         }});
-        crearLeyenda('legendEstados', estadosLabels, estadosData);
+        crearLeyenda('legendEstados', estadosLabels, estadosData, coloresEstados);
 
         // 2. Facturas pagadas vs pendientes (dona)
         const facturasLabels = ['Pagado', 'Pendiente de cobro'];
         const facturasData = [{pagado_total}, {pendiente_cobro}];
+        const coloresFacturas = [colorVerde, colorBorgona];
         new Chart(document.getElementById('chartFacturas'), {{
             type: 'doughnut',
             data: {{
                 labels: facturasLabels,
                 datasets: [{{
                     data: facturasData,
-                    backgroundColor: [colorVerde, colorBorgona],
+                    backgroundColor: coloresFacturas,
                     borderWidth: 2,
                     borderColor: '#ffffff'
                 }}]
@@ -500,19 +514,20 @@ def get(req):
                 }}
             }}
         }});
-        crearLeyenda('legendFacturas', facturasLabels, facturasData.map(v => 'S/. ' + v.toLocaleString('es-PE', {{minimumFractionDigits: 0}})), '');
+        crearLeyenda('legendFacturas', facturasLabels, facturasData.map(v => 'S/. ' + v.toLocaleString('es-PE', {{minimumFractionDigits: 0}})), coloresFacturas, '');
 
         // 3. Stock crítico por repuesto (circular)
         const stockLabels = {stock_labels!r};
         const stockData = {stock_data!r};
         if (stockLabels.length > 0) {{
+            const coloresStock = stockLabels.map((_, i) => paletaUnica[i % paletaUnica.length]);
             new Chart(document.getElementById('chartStock'), {{
                 type: 'doughnut',
                 data: {{
                     labels: stockLabels,
                     datasets: [{{
                         data: stockData,
-                        backgroundColor: paletaDonut.slice(0, stockLabels.length),
+                        backgroundColor: coloresStock,
                         borderWidth: 2,
                         borderColor: '#ffffff'
                     }}]
@@ -532,19 +547,20 @@ def get(req):
                     }}
                 }}
             }});
-            crearLeyenda('legendStock', stockLabels, stockData, ' u.');
+            crearLeyenda('legendStock', stockLabels, stockData, coloresStock, ' u.');
         }}
 
         // 4. Órdenes por mecánico (circular)
         const mecanicosLabels = {mecanicos_labels!r};
         const mecanicosData = {mecanicos_data!r};
+        const coloresMecanicos = mecanicosLabels.map((_, i) => paletaUnica[i % paletaUnica.length]);
         new Chart(document.getElementById('chartMecanicos'), {{
             type: 'doughnut',
             data: {{
                 labels: mecanicosLabels,
                 datasets: [{{
                     data: mecanicosData,
-                    backgroundColor: paletaDonut.slice(0, mecanicosLabels.length),
+                    backgroundColor: coloresMecanicos,
                     borderWidth: 2,
                     borderColor: '#ffffff'
                 }}]
@@ -564,7 +580,7 @@ def get(req):
                 }}
             }}
         }});
-        crearLeyenda('legendMecanicos', mecanicosLabels, mecanicosData, ' ord.');
+        crearLeyenda('legendMecanicos', mecanicosLabels, mecanicosData, coloresMecanicos, ' ord.');
     }})();
     """)
 
