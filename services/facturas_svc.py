@@ -14,7 +14,7 @@ class FacturaService:
     """
 
     ESTADOS_PAGO_VALIDOS  = {"pendiente", "pagada"}
-    METODOS_PAGO_VALIDOS  = {"Efectivo", "Tarjeta Débito", "Tarjeta Crédito", "Transferencia"}
+    METODOS_PAGO_VALIDOS  = {"Efectivo", "Tarjeta Débito", "Tarjeta Crédito", "Billetera Electrónica"}
 
     def __init__(self, repo: FacturaRepository, orden_repo: OrdenRepository):
         self._repo      = repo

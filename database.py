@@ -50,7 +50,7 @@ class OracleDB:
     def get_all_clientes(self) -> List[Dict]:
         conn = self._get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id_cliente, nombre, telefono, dni, email FROM CLIENTES ORDER BY id_cliente")
+        cursor.execute("SELECT id_cliente, nombre, telefono, dni, email FROM CLIENTES ORDER BY id_cliente DESC")
         result = self._rows_to_dicts(cursor)
         cursor.close()
         conn.close()
@@ -207,7 +207,17 @@ class OracleDB:
         cursor.close()
         conn.close()
         return actualizado
-
+    
+    def delete_empleado(self, id_empleado: int) -> bool:
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM EMPLEADOS WHERE id_empleado = :1", [id_empleado])
+        eliminado = cursor.rowcount > 0
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return eliminado
+    
     def get_reporte_mecanicos(self) -> List[Dict]:
         conn = self._get_connection()
         cursor = conn.cursor()
@@ -304,7 +314,51 @@ class OracleDB:
         cursor.close()
         conn.close()
         return actualizado
+    
+    def get_detalle_orden_by_id(self, id_detalle: int) -> Optional[Dict]:
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT d.id_detalle, d.id_orden, d.id_pieza, d.cantidad, d.precio_unitario,
+                r.nombre AS nombre_pieza
+            FROM DETALLE_ORDEN_REPUESTOS d
+            JOIN INVENTARIO_REPUESTOS r ON d.id_pieza = r.id_pieza
+            WHERE d.id_detalle = :1
+        """, [id_detalle])
+        rows = self._rows_to_dicts(cursor)
+        cursor.close()
+        conn.close()
+        return rows[0] if rows else None
 
+    def delete_detalle_orden(self, id_detalle: int) -> bool:
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        # Recuperar cantidad e id_pieza antes de borrar, para devolver el stock
+        cursor.execute(
+            "SELECT id_pieza, cantidad FROM DETALLE_ORDEN_REPUESTOS WHERE id_detalle = :1",
+            [id_detalle]
+        )
+        fila = cursor.fetchone()
+        if not fila:
+            cursor.close()
+            conn.close()
+            return False
+        id_pieza, cantidad = fila
+
+        cursor.execute("DELETE FROM DETALLE_ORDEN_REPUESTOS WHERE id_detalle = :1", [id_detalle])
+        eliminado = cursor.rowcount > 0
+
+        if eliminado:
+            cursor.execute(
+                "UPDATE INVENTARIO_REPUESTOS SET stock = stock + :1 WHERE id_pieza = :2",
+                [cantidad, id_pieza]
+            )
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return eliminado
+    
     # ── REPUESTOS ─────────────────────────────────────────────────────
     def get_all_repuestos(self) -> List[Dict]:
         conn = self._get_connection()
@@ -369,8 +423,8 @@ class OracleDB:
         cursor = conn.cursor()
         cursor.execute("""
             SELECT d.id_detalle, d.id_orden, d.id_pieza, d.cantidad, d.precio_unitario,
-                   r.nombre AS nombre_pieza,
-                   (d.cantidad * d.precio_unitario) AS subtotal
+                r.nombre AS nombre_pieza, r.codigo AS codigo_pieza,
+                (d.cantidad * d.precio_unitario) AS subtotal
             FROM DETALLE_ORDEN_REPUESTOS d
             JOIN INVENTARIO_REPUESTOS r ON d.id_pieza = r.id_pieza
             WHERE d.id_orden = :1
@@ -593,6 +647,27 @@ class MongoDB:
             query["anio"] = año
         return self._remove_id(list(self.catalogo.find(query)))
 
+    def update_catalogo(self, codigo: str, marca: str, modelo: str, anio: int,
+                        motor: str, aceite: str, transmision: str,
+                        bujias: str, bateria: str, otros: str = "") -> bool:
+        result = self.catalogo.update_one(
+            {"codigoEspecificacion": codigo},
+            {"$set": {
+                "marca": marca,
+                "modelo": modelo,
+                "anio": anio,
+                "detalles_tecnicos": {
+                    "motor": motor,
+                    "aceite": aceite,
+                    "transmision": transmision,
+                    "bujias": bujias,
+                    "bateria": bateria,
+                    "otros": otros,
+                }
+            }}
+        )
+        return result.modified_count > 0
+    
     # ── BITÁCORA DE DIAGNÓSTICO ───────────────────────────────────────
     def get_all_bitacoras(self) -> List[Dict]:
         # Ordenar si existe campo fecha (o por _id inverso)
@@ -601,10 +676,18 @@ class MongoDB:
     def get_bitacora_by_vehiculo(self, id_vehiculo: int) -> Optional[Dict]:
         return self._remove_id_single(self.bitacora.find_one({"idVehiculo": id_vehiculo}))
 
+    def get_bitacora_by_codigo(self, codigo_diagnostico: str) -> Optional[Dict]:
+        return self._remove_id_single(self.bitacora.find_one({"codigoDiagnostico": codigo_diagnostico}))
+
+    def get_bitacoras_by_vehiculo_all(self, id_vehiculo: int) -> List[Dict]:
+        return self._remove_id(list(self.bitacora.find({"idVehiculo": id_vehiculo})))
+
     def create_bitacora(self, id_vehiculo: int, id_empleado: int, codigo_especificacion: str,
                         sintomas: List[str], codigos_obd: List[str], observaciones: str) -> Dict:
+        total = self.bitacora.count_documents({})
+        codigo = f"DIAG-{total + 1:03d}"
         nuevo = {
-            "codigoDiagnostico": str(uuid.uuid4()),
+            "codigoDiagnostico": codigo,
             "idVehiculo": id_vehiculo,
             "idEmpleado": id_empleado,
             "codigoEspecificacion": codigo_especificacion,
@@ -612,10 +695,20 @@ class MongoDB:
             "codigo_OBD": codigos_obd,
             "fotografias_url": [],
             "observaciones": observaciones,
-            "fecha": datetime.now()
         }
         self.bitacora.insert_one(nuevo)
         return self._remove_id_single(nuevo)
+    
+    def agregar_fotos_bitacora(self, codigo_diagnostico: str, urls: List[str]) -> bool:
+        """
+        Agrega URLs de fotos al array fotografias_url de una bitácora existente,
+        identificada por su codigoDiagnostico (único).
+        """
+        result = self.bitacora.update_one(
+            {"codigoDiagnostico": codigo_diagnostico},
+            {"$push": {"fotografias_url": {"$each": urls}}}
+        )
+        return result.modified_count > 0
 
     # ── HISTORIAL DE MANTENIMIENTO ────────────────────────────────────
     def get_all_historial(self) -> List[Dict]:
@@ -639,13 +732,35 @@ class MongoDB:
 
     # ── COTIZACIONES ──────────────────────────────────────────────────
     def get_all_cotizaciones(self) -> List[Dict]:
+        """
+        Consulta y retorna todos los documentos de la colección 'cotizaciones' en MongoDB.
+        Remueve o convierte el ObjectID nativo a String para compatibilidad en el frontend.
+        """
         return self._remove_id(list(self.cotizaciones.find()))
 
     def get_cotizacion(self, codigo: str) -> Optional[Dict]:
+        """
+        Busca un único documento de cotización por su código único de negocio.
+        """
         return self._remove_id_single(self.cotizaciones.find_one({"codigoCotizacion": codigo}))
 
+    def get_ultimo_codigo_cotizacion(self, prefix: str) -> Optional[str]:
+        """
+        Obtiene el último código de cotización registrado para un prefijo de año específico en MongoDB.
+        Utiliza el índice/ordenación nativo por codigoCotizacion descendente.
+        """
+        doc = self.cotizaciones.find_one(
+            {"codigoCotizacion": {"$regex": f"^{prefix}"}},
+            sort=[("codigoCotizacion", -1)]
+        )
+        return doc.get("codigoCotizacion") if doc else None
+
     def create_cotizacion(self, codigo: str, id_cliente: int, id_vehiculo: int,
-                          fecha_validez: str, servicios: list, total: float) -> Dict:
+                          fecha_validez: Any, servicios: list, total: float) -> Dict:
+        """
+        Inserta una nueva cotización con servicios y repuestos embebidos en MongoDB.
+        Soporta fecha_validez como tipo datetime.datetime o string ISO.
+        """
         nuevo = {
             "codigoCotizacion": codigo,
             "idCliente": id_cliente,
@@ -656,7 +771,7 @@ class MongoDB:
         }
         self.cotizaciones.insert_one(nuevo)
         return self._remove_id_single(nuevo)
-
+    
     # ── PROVEEDORES ───────────────────────────────────────────────────
     def get_all_proveedores(self) -> List[Dict]:
         return self._remove_id(list(self.proveedores.find()))
@@ -709,11 +824,39 @@ class MongoDB:
         return self._remove_id(list(self.logs.find().sort("fecha_hora", -1).limit(limit)))
 
     # ── ALERTAS ───────────────────────────────────────────────────────
-    def get_alertas_activas(self, destinatario: str = None) -> List[Dict]:
+    def get_alertas_activas(self, destinatario: str = None, limit: int = 20) -> List[Dict]:
+        """Retorna las alertas más recientes, ordenadas por fecha descendente."""
         query = {}
         if destinatario:
             query["destinatario"] = destinatario
-        return self._remove_id(list(self.alertas.find(query)))
+        return self._remove_id(
+            list(self.alertas.find(query).sort("_id", -1).limit(limit))
+        )
+
+    def existe_alerta_similar(self, tipo_evento: str, clave_unica: str) -> bool:
+        """
+        Evita duplicar alertas: busca si ya existe una con el mismo
+        tipo_evento y la misma clave de negocio en detalle_notificacion.
+        """
+        return self.alertas.find_one({
+            "tipo_evento": tipo_evento,
+            "detalle_notificacion.clave": clave_unica
+        }) is not None
+
+    def crear_alerta(self, codigo: str, tipo_evento: str, detalle_notificacion: dict) -> Dict:
+        """Inserta una nueva alerta en alertas_sistema."""
+        nueva = {
+            "codigoAlerta": codigo,
+            "tipo_evento": tipo_evento,
+            "detalle_notificacion": detalle_notificacion,
+        }
+        self.alertas.insert_one(nueva)
+        return self._remove_id_single(nueva)
+
+    def siguiente_codigo_alerta(self) -> str:
+        """Genera el siguiente código secuencial tipo ALER-001, ALER-002, ..."""
+        total = self.alertas.count_documents({})
+        return f"ALER-{total + 1:03d}"
 
 
 # ═══════════════════════════════════════════════════════════════════════

@@ -4,6 +4,7 @@ services/ordenes_svc.py
 Lógica de negocio para Órdenes de Trabajo.
 Incluye reglas de orquestación entre Oracle y la capa de stock.
 """
+import re
 from typing import List, Optional, Dict
 from repositories.oracle.ordenes_repo   import OrdenRepository
 from repositories.oracle.repuestos_repo import RepuestoRepository
@@ -80,3 +81,128 @@ class OrdenService:
             if estado in stats:
                 stats[estado] += 1
         return stats
+
+    def _normalizar(self, texto: str) -> str:
+        """trim + lowercase + colapsar espacios múltiples."""
+        return re.sub(r"\s+", " ", (texto or "").strip().lower())
+
+    def cargar_cotizacion(self, id_orden: int, cotizacion: Dict, repuestos_inventario: List[Dict]) -> Dict:
+        """
+        Procesa una cotización de Mongo y la aplica a una orden existente:
+          - Cada línea {item, precio} se clasifica contra el inventario por nombre normalizado.
+          - Si coincide -> es repuesto: cantidad = round(precio / precio_venta_actual),
+            se inserta en DETALLE_ORDEN_REPUESTOS (vía agregar_repuesto, que ya valida stock
+            y descuenta inventario).
+          - Si no coincide -> es servicio: queda solo informativo, no se persiste en Oracle.
+
+        Retorna un resumen para mostrar en pantalla:
+          {
+            "repuestos_cargados": [{"nombre","cantidad","precio_unitario","subtotal"}],
+            "servicios": [{"item","precio"}],
+            "advertencias": ["mensaje..."],
+            "total_repuestos": float,
+            "total_servicios": float,
+            "total_general": float,
+          }
+        """
+        indice_inventario = {
+            self._normalizar(r["nombre"]): r for r in repuestos_inventario
+        }
+
+        repuestos_cargados = []
+        servicios = []
+        advertencias = []
+
+        for linea in cotizacion.get("servicios_repuestos", []):
+            item = linea.get("item", "")
+            precio = float(linea.get("precio", 0.0))
+            clave = self._normalizar(item)
+
+            repuesto = indice_inventario.get(clave)
+            if repuesto is None:
+                # No coincide con inventario -> es un servicio (mano de obra)
+                servicios.append({"item": item, "precio": precio})
+                continue
+
+            precio_venta = float(repuesto.get("precio_venta", 0.0))
+            if precio_venta <= 0:
+                advertencias.append(
+                    f"'{item}' coincide con el inventario pero no tiene precio de venta válido; se omitió."
+                )
+                continue
+
+            cantidad_exacta = precio / precio_venta
+            cantidad = max(1, round(cantidad_exacta))
+
+            # Advertencia si el redondeo se aleja de forma notoria del valor exacto
+            diferencia = abs(cantidad_exacta - cantidad)
+            if diferencia > 0.15:
+                advertencias.append(
+                    f"'{item}': el precio cotizado (S/. {precio:.2f}) no coincide exactamente "
+                    f"con {cantidad} unidad(es) al precio actual (S/. {precio_venta:.2f} c/u). "
+                    f"Verifica antes de confirmar."
+                )
+
+            try:
+                self.agregar_repuesto(id_orden, repuesto["id_pieza"], cantidad, precio_venta)
+                repuestos_cargados.append({
+                    "nombre": repuesto["nombre"],
+                    "cantidad": cantidad,
+                    "precio_unitario": precio_venta,
+                    "subtotal": cantidad * precio_venta,
+                })
+            except ValueError as e:
+                advertencias.append(f"'{item}': no se pudo cargar — {str(e)}")
+
+        total_repuestos = sum(r["subtotal"] for r in repuestos_cargados)
+        total_servicios = sum(s["precio"] for s in servicios)
+
+        return {
+            "repuestos_cargados": repuestos_cargados,
+            "servicios": servicios,
+            "advertencias": advertencias,
+            "total_repuestos": total_repuestos,
+            "total_servicios": total_servicios,
+            "total_general": total_repuestos + total_servicios,
+        }
+    
+    def clasificar_cotizacion(self, cotizacion: Dict, repuestos_inventario: List[Dict]) -> Dict:
+        """
+        Igual que cargar_cotizacion pero SOLO LECTURA: clasifica servicios vs repuestos
+        para mostrar en pantalla, sin insertar nada en Oracle ni descontar stock.
+        """
+        indice_inventario = {
+            self._normalizar(r["nombre"]): r for r in repuestos_inventario
+        }
+
+        repuestos_cotizados = []
+        servicios = []
+
+        for linea in cotizacion.get("servicios_repuestos", []):
+            item = linea.get("item", "")
+            precio = float(linea.get("precio", 0.0))
+            clave = self._normalizar(item)
+
+            repuesto = indice_inventario.get(clave)
+            if repuesto is None:
+                servicios.append({"item": item, "precio": precio})
+            else:
+                repuestos_cotizados.append({"item": item, "precio": precio})
+
+        total_servicios = sum(s["precio"] for s in servicios)
+        total_repuestos_cotizados = sum(r["precio"] for r in repuestos_cotizados)
+
+        return {
+            "servicios": servicios,
+            "repuestos_cotizados": repuestos_cotizados,
+            "total_servicios": total_servicios,
+            "total_repuestos_cotizados": total_repuestos_cotizados,
+            "total_general": total_servicios + total_repuestos_cotizados,
+        }
+    
+    def quitar_repuesto(self, id_detalle: int) -> bool:
+        """
+        Elimina un repuesto de la orden y repone esa cantidad al stock
+        (vía OrdenRepository.eliminar_detalle, que ya hace el UPDATE de stock).
+        """
+        return self._repo.eliminar_detalle(id_detalle)

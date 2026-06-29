@@ -81,29 +81,36 @@ MENU_POR_ROL = {
 # ─────────────────────────────────────────────────────────────────────
 _sessions: Dict[str, Dict] = {}
 
-def login(username: str, password: str) -> Optional[Dict]:
+def login(username: str, password: str, ip: str = "desconocida") -> Optional[Dict]:
     """
-    Autentica al usuario contra la tabla USUARIOS (mock Oracle).
+    Autentica al usuario contra la tabla USUARIOS.
     Retorna el usuario si es válido y activo, o None si falla.
+    Cada intento fallido queda registrado en log_actividad (auditoría técnica)
+    Y además genera una alerta en alertas_sistema (Seguridad - Acceso Denegado),
+    que es lo que ve el taller en el dashboard.
     """
     db = get_oracle_connection()
     mongo = get_mongo_connection()
-    
+    from controllers import deps
+
     usuario = db.get_usuario_by_username(username)
-    
+
     if not usuario:
         mongo.registrar_log(0, "LOGIN_FALLIDO", "auth", f"usuario_no_existe:{username}")
+        deps.alertas.registrar_login_fallido(username, "usuario_no_existe", ip)
         return None
-    
+
     from security import verify_password
     if not verify_password(password, usuario["password"]):
         mongo.registrar_log(usuario["id_empleado"], "LOGIN_FALLIDO", "auth", "contraseña_incorrecta")
+        deps.alertas.registrar_login_fallido(username, "contraseña_incorrecta", ip)
         return None
-    
+
     if usuario["estado"] != "activo":
         mongo.registrar_log(usuario["id_empleado"], "LOGIN_FALLIDO", "auth", "usuario_inactivo")
+        deps.alertas.registrar_login_fallido(username, "usuario_inactivo", ip)
         return None
-    
+
     # Login exitoso
     mongo.registrar_log(usuario["id_empleado"], "LOGIN", "auth", "exitoso")
     return usuario

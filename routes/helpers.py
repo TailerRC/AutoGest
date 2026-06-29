@@ -45,8 +45,8 @@ def layout(req, title: str, page_title: str, page_subtitle: str, contenido):
                     cls="sidebar-logo-img"
                 ),
                 Div(
-                    H2("AutoGest"),
-                    Span("Taller & Concesionaria"),
+                    H2("Autogest"),
+                    Span("Euroshop"),
                     cls="brand-text"
                 ),
                 cls="sidebar-brand-inner"
@@ -90,17 +90,6 @@ def layout(req, title: str, page_title: str, page_subtitle: str, contenido):
             P(page_subtitle) if page_subtitle else "",
             cls="topbar-title"
         ),
-        Div(
-            Span(
-                I(cls="fa-solid fa-database"), " Oracle",
-                cls="db-pill oracle"
-            ),
-            Span(
-                I(cls="fa-solid fa-leaf"), " MongoDB",
-                cls="db-pill mongo"
-            ),
-            cls="topbar-actions"
-        ),
         cls="topbar"
     )
 
@@ -117,7 +106,9 @@ def layout(req, title: str, page_title: str, page_subtitle: str, contenido):
                 sidebar,
                 Div(topbar, contenido, cls="main-content"),
                 cls="app-layout"
-            )
+            ),
+            modal_confirmacion(),
+            Script(src="/js/confirm-modal.js"),
         )
     )
 
@@ -133,6 +124,41 @@ def login_layout(title: str, contenido):
             Link(rel="stylesheet", href="/styles/styles.css"),
         ),
         Body(Div(contenido, cls="login-page"))
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Modal de confirmación global (eliminación, etc.)
+# ─────────────────────────────────────────────────────────────────────
+
+def modal_confirmacion():
+    """
+    Modal de confirmación reutilizable, oculto por defecto.
+    Se inyecta una sola vez en el layout principal. Se controla
+    desde JS puro vía confirm-modal.js (función confirmarEliminar()).
+    """
+    return Div(
+        Div(
+            Div(I(cls="fa-solid fa-triangle-exclamation"), cls="modal-icon"),
+            H3("¿Eliminar registro?", id="modal-confirm-titulo"),
+            P("Esta acción no se puede deshacer.", id="modal-confirm-mensaje"),
+            Div(
+                Button(
+                    "Cancelar", type="button",
+                    cls="btn btn-secondary",
+                    onclick="cerrarModalConfirm()"
+                ),
+                Button(
+                    I(cls="fa-solid fa-trash"), " Eliminar", type="button",
+                    id="modal-confirm-aceptar",
+                    cls="btn btn-danger"
+                ),
+                cls="modal-actions"
+            ),
+            cls="modal-box"
+        ),
+        id="modal-confirm-overlay",
+        cls="modal-overlay"
     )
 
 
@@ -202,10 +228,10 @@ def badge_rol(rol: str):
 
 def badge_pago(metodo: str):
     mapa = {
-        "Efectivo":        "badge-green",
-        "Tarjeta Débito":  "badge-blue",
-        "Tarjeta Crédito": "badge-indigo",
-        "Transferencia":   "badge-cyan",
+        "Efectivo":              "badge-green",
+        "Tarjeta Débito":        "badge-blue",
+        "Tarjeta Crédito":       "badge-indigo",
+        "Billetera Electrónica": "badge-yellow",
     }
     css = mapa.get(metodo, "badge-gray")
     return Span(metodo, cls=f"badge {css}")

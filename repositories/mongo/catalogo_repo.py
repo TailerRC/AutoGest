@@ -36,3 +36,12 @@ class CatalogoRepository:
               return list(self._col.find(query))
         """
         return self._db.buscar_catalogo(marca=marca, modelo=modelo, año=año)
+
+    def actualizar(self, codigo: str, marca: str, modelo: str, anio: int,
+                motor: str, aceite: str, transmision: str,
+                bujias: str, bateria: str, otros: str = "") -> bool:
+        """
+        TODO: self._col.update_one({"codigoEspecificacion": codigo}, {"$set": {...}})
+        """
+        return self._db.update_catalogo(codigo, marca, modelo, anio, motor,
+                                        aceite, transmision, bujias, bateria, otros)

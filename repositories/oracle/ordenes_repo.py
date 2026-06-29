@@ -81,3 +81,17 @@ class OrdenRepository:
               UPDATE INVENTARIO_REPUESTOS SET stock=stock-:cantidad WHERE id_pieza=:id_pieza
         """
         return self._db.add_detalle_orden(id_orden, id_pieza, cantidad, precio_unitario)
+    
+    def get_detalle_by_id(self, id_detalle: int) -> Optional[Dict]:
+        """
+        TODO: SELECT d.*, p.nombre FROM DETALLE_ORDEN_REPUESTOS d
+            JOIN INVENTARIO_REPUESTOS p ON d.id_pieza = p.id_pieza
+            WHERE d.id_detalle = :1
+        """
+        return self._db.get_detalle_orden_by_id(id_detalle)
+
+    def eliminar_detalle(self, id_detalle: int) -> bool:
+        """
+        TODO: DELETE FROM DETALLE_ORDEN_REPUESTOS WHERE id_detalle = :1
+        """
+        return self._db.delete_detalle_orden(id_detalle)
