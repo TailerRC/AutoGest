@@ -603,6 +603,27 @@ class MongoDB:
             query["anio"] = año
         return self._remove_id(list(self.catalogo.find(query)))
 
+    def update_catalogo(self, codigo: str, marca: str, modelo: str, anio: int,
+                        motor: str, aceite: str, transmision: str,
+                        bujias: str, bateria: str, otros: str = "") -> bool:
+        result = self.catalogo.update_one(
+            {"codigoEspecificacion": codigo},
+            {"$set": {
+                "marca": marca,
+                "modelo": modelo,
+                "anio": anio,
+                "detalles_tecnicos": {
+                    "motor": motor,
+                    "aceite": aceite,
+                    "transmision": transmision,
+                    "bujias": bujias,
+                    "bateria": bateria,
+                    "otros": otros,
+                }
+            }}
+        )
+        return result.modified_count > 0
+    
     # ── BITÁCORA DE DIAGNÓSTICO ───────────────────────────────────────
     def get_all_bitacoras(self) -> List[Dict]:
         # Ordenar si existe campo fecha (o por _id inverso)

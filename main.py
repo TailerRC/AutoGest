@@ -58,7 +58,7 @@ from controllers.usuarios_ctrl import (
     ctrl_usuarios_list, ctrl_usuarios_nuevo, ctrl_usuarios_crear,
     ctrl_usuarios_editar, ctrl_usuarios_actualizar, ctrl_usuarios_desactivar,
 )
-from controllers.catalogo_ctrl import ctrl_catalogo_list
+from controllers.catalogo_ctrl import ctrl_catalogo_list, ctrl_catalogo_actualizar
 from controllers.bitacora_ctrl import (
     ctrl_bitacora_list, ctrl_bitacora_nueva, ctrl_bitacora_crear, ctrl_bitacora_detalle
 )
@@ -865,6 +865,13 @@ def get(req):
     if not require_login(req): return RedirectResponse("/login", status_code=303)
     return ctrl_catalogo_list(req)
 
+@rt("/catalogo/actualizar")
+def post(req, codigo: str, marca: str, modelo: str, anio: int,
+         motor: str = "", aceite: str = "", transmision: str = "",
+         bujias: str = "", bateria: str = "", otros: str = ""):
+    if not require_login(req): return RedirectResponse("/login", status_code=303)
+    return ctrl_catalogo_actualizar(req, codigo, marca, modelo, anio, motor,
+                                     aceite, transmision, bujias, bateria, otros)
 
 # ═══════════════════════════════════════════════════════════════════════
 # BITÁCORA DE DIAGNÓSTICO (MongoDB)
