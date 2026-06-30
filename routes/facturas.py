@@ -7,6 +7,7 @@ from fasthtml.common import *
 from auth import puede_acceder
 from .helpers import layout, badge_estado, badge_pago
 import json
+import math
 
 METODOS_PAGO = ["Efectivo", "Tarjeta Débito", "Tarjeta Crédito", "Billetera Electrónica"]
 
@@ -33,6 +34,22 @@ def render_facturas_list(req, usuario, facturas):
     pagadas         = sum(1 for f in facturas if f.get("estado_pago") == "pagada")
     pendientes      = sum(1 for f in facturas if f.get("estado_pago") == "pendiente")
     total           = len(facturas)
+
+    # Paginación
+    items_per_page = 10
+    total_pages = max(1, math.ceil(total / items_per_page))
+    try:
+        page = int(req.query_params.get("page", 1))
+    except (ValueError, TypeError):
+        page = 1
+    if page < 1:
+        page = 1
+    if page > total_pages:
+        page = total_pages
+
+    start_idx = (page - 1) * items_per_page
+    end_idx = start_idx + items_per_page
+    paginated_facturas = facturas[start_idx:end_idx]
 
     # Conteo por método de pago
     metodos_count = {m: 0 for m in METODOS_PAGO}
@@ -190,7 +207,7 @@ def render_facturas_list(req, usuario, facturas):
 
     # ── Tabla ────────────────────────────────────────────────────────
     filas = []
-    for f in facturas:
+    for f in paginated_facturas:
         fecha = str(f.get("fecha", "—")).split(" ")[0]
 
         factura_badge = Div(
@@ -256,6 +273,58 @@ def render_facturas_list(req, usuario, facturas):
         cls="table-wrap"
     )
 
+    # Generar controles de paginación
+    paginacion_controles = ""
+    if total_pages > 1:
+        paginas_rango = []
+        paginas_rango.append(1)
+        rango_inicio = max(2, page - 1)
+        rango_fin = min(total_pages - 1, page + 1)
+        
+        if rango_inicio > 2:
+            paginas_rango.append("...")
+            
+        for p in range(rango_inicio, rango_fin + 1):
+            paginas_rango.append(p)
+            
+        if rango_fin < total_pages - 1:
+            paginas_rango.append("...")
+            
+        if total_pages > 1 and total_pages not in paginas_rango:
+            paginas_rango.append(total_pages)
+
+        botones_paginas = []
+        
+        btn_prev_cls = "btn-pag btn-pag-prev" + (" disabled" if page == 1 else "")
+        btn_prev_href = f"/facturas?page={page - 1}" if page > 1 else "#"
+        botones_paginas.append(
+            A(I(cls="fa-solid fa-chevron-left"), href=btn_prev_href, cls=btn_prev_cls, **{"data-tooltip": "Anterior"})
+        )
+        
+        for p in paginas_rango:
+            if p == "...":
+                botones_paginas.append(Span("...", cls="pag-ellipsis"))
+            else:
+                btn_num_cls = "btn-pag" + (" active" if p == page else "")
+                botones_paginas.append(
+                    A(str(p), href=f"/facturas?page={p}", cls=btn_num_cls)
+                )
+                
+        btn_next_cls = "btn-pag btn-pag-next" + (" disabled" if page == total_pages else "")
+        btn_next_href = f"/facturas?page={page + 1}" if page < total_pages else "#"
+        botones_paginas.append(
+            A(I(cls="fa-solid fa-chevron-right"), href=btn_next_href, cls=btn_next_cls, **{"data-tooltip": "Siguiente"})
+        )
+        
+        rango_mostrado_inicio = start_idx + 1 if total > 0 else 0
+        rango_mostrado_fin = min(end_idx, total)
+        
+        paginacion_controles = Div(
+            Div(f"Mostrando {rango_mostrado_inicio}-{rango_mostrado_fin} de {total} facturas", cls="pag-info"),
+            Div(*botones_paginas, cls="pag-buttons"),
+            cls="pag-container"
+        )
+
     contenido = Div(
         Style("""
             .factura-id-badge {
@@ -301,6 +370,67 @@ def render_facturas_list(req, usuario, facturas):
                 font-family: monospace;
                 color: var(--text-secondary);
             }
+            .pag-container {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-top: 1.25rem;
+                padding-top: 1rem;
+                border-top: 1px solid var(--border);
+                flex-wrap: wrap;
+                gap: 1rem;
+            }
+            .pag-info {
+                font-size: 0.85rem;
+                color: var(--text-muted);
+            }
+            .pag-buttons {
+                display: flex;
+                align-items: center;
+                gap: 0.35rem;
+            }
+            .btn-pag {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                min-width: 32px;
+                height: 32px;
+                padding: 0 0.5rem;
+                border-radius: 6px;
+                border: 1px solid var(--border);
+                background: var(--bg-card, #ffffff);
+                color: var(--text-primary);
+                font-size: 0.85rem;
+                font-weight: 500;
+                text-decoration: none;
+                transition: all 0.2s ease;
+                cursor: pointer;
+            }
+            .btn-pag:hover:not(.disabled):not(.active) {
+                background: var(--brand-primary-light, rgba(122, 12, 17, 0.05));
+                border-color: var(--brand-primary, #7A0C11);
+                color: var(--brand-primary, #7A0C11);
+            }
+            .btn-pag.active {
+                background: var(--brand-primary, #7A0C11);
+                border-color: var(--brand-primary, #7A0C11);
+                color: #ffffff !important;
+                font-weight: 600;
+            }
+            .btn-pag.disabled {
+                opacity: 0.4;
+                cursor: not-allowed;
+                pointer-events: none;
+            }
+            .pag-ellipsis {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                min-width: 32px;
+                height: 32px;
+                color: var(--text-muted);
+                font-size: 0.85rem;
+            }
         """),
         alert,
         grafico,
@@ -314,6 +444,7 @@ def render_facturas_list(req, usuario, facturas):
                     style="justify-content:space-between;align-items:center;margin-bottom:1rem;"
                 ),
                 tabla,
+                paginacion_controles,
                 cls="card-body"
             ),
             cls="card fade-in"
