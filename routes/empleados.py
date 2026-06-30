@@ -434,7 +434,7 @@ def render_empleados_nuevo(req):
             ),
             cls="page-body"
         )
-    return layout(req, "Nuevo Empleado", "Nuevo Empleado", "Base de datos Oracle", contenido)
+    return layout(req, "Nuevo Empleado", "Nuevo Empleado", "Incorporación de Nuevos Empleados", contenido)
 
 
 def render_empleados_editar(req, empleado):

@@ -315,7 +315,7 @@ def render_ordenes_list(req, usuario, ordenes, todas_ordenes=None, page=1, total
         ),
         cls="page-body"
     )
-    return layout(req, "Órdenes", "Órdenes de Trabajo", "Base de datos Oracle", contenido)
+    return layout(req, "Órdenes", "Órdenes de Trabajo", "Seguimiento de reparaciones activas", contenido)
 
 
 def render_ordenes_detalle(req, usuario, orden, repuestos, cotizacion_vehiculo=None):
@@ -883,7 +883,7 @@ def render_ordenes_nueva(req, vehiculos, mecanicos, cotizaciones_por_vehiculo=No
         cls="page-body"
     )
     return layout(req, "Nueva Orden", "Nueva Orden de Trabajo",
-                  "Base de datos Oracle", contenido)
+                  "Generación de Orden de Trabajo", contenido)
 
 
 def render_ordenes_editar(req, orden, vehiculos, empleados):

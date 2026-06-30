@@ -218,27 +218,24 @@ def render_reportes_list(req, ordenes, logs, resumen, mecanicos, usuarios=None):
         Div(
             Div(
                 Div(H2(I(cls="fa-solid fa-chart-pie"), " Resumen del Sistema"),
-                    Span("Oracle + MongoDB", cls="badge badge-orange"),
                     cls="card-header"),
                 Div(seccion_superior, cls="card-body"),
                 cls="card mb-2"
             )
         ),
         Div(
-            Div(H2(I(cls="fa-solid fa-user-gear"), " Rendimiento de Mecánicos"),
-                Span("Oracle", cls="db-tag oracle"), cls="card-header"),
+            Div(H2(I(cls="fa-solid fa-user-gear"), " Rendimiento de Mecánicos"), cls="card-header"),
             Div(tabla_mecanicos, cls="card-body"),
             cls="card mb-2 fade-in"
         ),
         Div(
-            Div(H2(I(cls="fa-solid fa-clock-rotate-left"), " Log de Actividad Reciente"),
-                Span("MongoDB", cls="db-tag mongo"), cls="card-header"),
+            Div(H2(I(cls="fa-solid fa-clock-rotate-left"), " Log de Actividad Reciente"), cls="card-header"),
             Div(tabla_log, cls="card-body"),
             cls="card fade-in"
         ),
         cls="page-body"
     )
-    return layout(req, "Reportes", "Reportes del Sistema", "Datos combinados Oracle + MongoDB", contenido)
+    return layout(req, "Reportes", "Reportes del Sistema", "Estadísticas y finanzas", contenido)
 
 def render_reportes_detalle(req, datos):
     """Renderiza el reporte detallado de una orden integrando Oracle y Mongo."""
@@ -418,4 +415,4 @@ def render_reportes_detalle(req, datos):
         resumen,
         cls="page-body"
     )
-    return layout(req, f"Reporte Orden #{id_orden}", f"Reporte Integrado — Orden #{id_orden}", "Oracle + MongoDB", contenido)
+    return layout(req, f"Reporte Orden #{id_orden}", f"Reporte Integrado — Orden #{id_orden}", "Visualización de Reportes", contenido)

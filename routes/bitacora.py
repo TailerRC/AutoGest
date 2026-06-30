@@ -109,7 +109,7 @@ def render_bitacora_list(req, usuario, bitacoras, q="", page=1, total_pages=1, t
     contenido = Div(
         alert,
         Div(
-            Div(H2(I(cls="fa-solid fa-clipboard-list"), " Bitácora de Diagnóstico"), Span("MongoDB", cls="db-tag mongo"), cls="card-header"),
+            Div(H2(I(cls="fa-solid fa-clipboard-list"), " Bitácora de Diagnóstico"), cls="card-header"),
             Div(
                 Div(Span(f"{total_count} registros", cls="text-muted text-sm"), crear_btn,
                     cls="flex gap-2", style="justify-content:space-between;align-items:center;margin-bottom:1rem;"),
@@ -122,7 +122,7 @@ def render_bitacora_list(req, usuario, bitacoras, q="", page=1, total_pages=1, t
         ),
         cls="page-body"
     )
-    return layout(req, "Bitácora", "Bitácora de Diagnóstico", "Base de datos MongoDB", contenido)
+    return layout(req, "Bitácora", "Bitácora de Diagnóstico", "Códigos OBD y evidencias", contenido)
 
 
 def render_bitacora_detalle(req, bitacora, vehiculo):

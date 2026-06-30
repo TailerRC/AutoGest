@@ -637,12 +637,11 @@ def render_repuestos_list(req, usuario, repuestos, todos_repuestos, q="", filtro
         Div(
             Div(
                 H2(I(cls="fa-solid fa-gears"), " Inventario de Repuestos"),
-                Span("Oracle", cls="db-tag oracle"),
                 cls="card-header"
             ),
             Div(
                 Div(
-                    P("Gestión de piezas de recambio y stock automotriz relacional en Oracle.", cls="text-muted text-sm"),
+                    P("Gestión de piezas de recambio y stock automotriz.", cls="text-muted text-sm"),
                     crear_btn,
                     cls="flex gap-2",
                     style="justify-content:space-between;align-items:center;margin-bottom:1.5rem;"
@@ -662,7 +661,7 @@ def render_repuestos_list(req, usuario, repuestos, todos_repuestos, q="", filtro
         charts_stock_script,
         cls="page-body"
     )
-    return layout(req, "Repuestos", "Inventario de Repuestos", "Base de datos Oracle", contenido)
+    return layout(req, "Repuestos", "Inventario de Repuestos", "Control de stock y piezas", contenido)
 
 
 

@@ -4,7 +4,7 @@
 
 ---
 
-## 🚀 Cómo ejecutar
+## Cómo ejecutar
 
 ```bash
 # 1. Instalar dependencias (ya instaladas si requirements.txt fue procesado)
@@ -19,7 +19,7 @@ http://localhost:5001
 
 ---
 
-## 👤 Usuarios de prueba
+## Usuarios de prueba
 
 | Username | Contraseña | Rol | Acceso |
 |---|---|---|---|
@@ -30,7 +30,7 @@ http://localhost:5001
 
 ---
 
-## 🏗️ Arquitectura del Sistema
+## Arquitectura del Sistema
 
 ```
 AutoGest/
@@ -57,7 +57,7 @@ AutoGest/
 
 ---
 
-## 🗄️ Base de Datos Simulada
+## Base de Datos Simulada
 
 ### Oracle (8 tablas relacionales)
 | Tabla | Descripción |
@@ -84,24 +84,9 @@ AutoGest/
 
 ---
 
-## 🔑 Sistema de Roles
-
-| Módulo | Admin | Mecánico | Facturación | Solo Lectura |
-|---|---|---|---|---|
-| Clientes | ✅ CRUD | ❌ | ✅ Ver | ❌ |
-| Vehículos | ✅ CRUD | ❌ | ❌ | ❌ |
-| Empleados | ✅ CRUD | ❌ | ❌ | ❌ |
-| Órdenes | ✅ CRUD | ✅ Ver/Crear | ✅ Ver | ✅ Ver |
-| Repuestos | ✅ CRUD | ✅ Ver | ❌ | ❌ |
-| Facturas | ✅ CRUD | ❌ | ✅ Ver/Crear/Editar | ✅ Ver |
-| Usuarios | ✅ CRUD | ❌ | ❌ | ❌ |
-| Catálogo | ✅ | ✅ | ❌ | ❌ |
-| Bitácora | ✅ CRUD | ✅ Ver/Crear | ❌ | ❌ |
-| Reportes | ✅ | ❌ | ❌ | ✅ |
-
 ---
 
-## 🔄 Migración a bases de datos reales
+## Migración a bases de datos reales
 
 Todos los puntos de migración están marcados con comentarios `# TODO`:
 
@@ -129,21 +114,6 @@ ORACLE_PORT=1521
 ORACLE_SERVICE=ORCL
 MONGO_URI=mongodb://localhost:27017/
 ```
-
----
-
-## 🧪 Flujo de prueba sugerido
-
-1. **Login como `admin`** → explorar dashboard y estadísticas
-2. **Crear un nuevo cliente** → Clientes → "+ Nuevo Cliente"
-3. **Registrar su vehículo** → Vehículos → "+ Nuevo Vehículo"
-4. **Crear una orden de trabajo** → Órdenes → "+ Nueva Orden"
-5. **Ver detalle de orden** → agregar repuestos usados
-6. **Crear bitácora de diagnóstico** → Bitácora → "+ Nueva Bitácora"
-7. **Generar factura** → Facturas → "+ Generar Factura"
-8. **Ver reporte combinado** → Reportes → seleccionar orden → "Ver Reporte"
-9. **Cambiar a rol `mecanico1`** → verificar menú reducido
-10. **Intentar acceder a /usuarios** → ver mensaje de acceso denegado
 
 ---
 

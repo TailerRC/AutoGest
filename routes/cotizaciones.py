@@ -256,13 +256,12 @@ def render_cotizaciones_list(req, usuario, cotizaciones, q="", estado="todos", o
         Div(
             Div(
                 H2(I(cls="fa-solid fa-file-invoice-dollar"), " Cotizaciones"),
-                Span("MongoDB", cls="db-tag mongo"),
                 cls="card-header"
             ),
             Div(
                 Div(
                     P(
-                        "Gestión de proformas y cotizaciones pre-servicio en base de datos NoSQL.",
+                        "Gestión de cotizaciones",
                         cls="text-muted text-sm"
                     ),
                     crear_btn,
@@ -284,7 +283,7 @@ def render_cotizaciones_list(req, usuario, cotizaciones, q="", estado="todos", o
         req,
         "Cotizaciones",
         "Gestión de Cotizaciones",
-        "Base de datos MongoDB",
+        "Presupuestos y precios comerciales",
         contenido
     )
 
@@ -610,7 +609,6 @@ def render_cotizaciones_detalle(req, cotizacion):
             Div(
                 Div(
                     H2(I(cls="fa-solid fa-file-invoice-dollar"), f" Cotización {cotizacion.get('codigoCotizacion')}"),
-                    Span("MongoDB", cls="db-tag mongo"),
                 ),
                 A(I(cls="fa-solid fa-arrow-left"), " Volver", href="/cotizaciones", cls="btn btn-secondary btn-sm"),
                 cls="card-header"
