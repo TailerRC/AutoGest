@@ -883,7 +883,7 @@ def render_ordenes_nueva(req, vehiculos, mecanicos, cotizaciones_por_vehiculo=No
         cls="page-body"
     )
     return layout(req, "Nueva Orden", "Nueva Orden de Trabajo",
-                  "Base de datos Oracle", contenido)
+                  "Generación de Orden de Trabajo", contenido)
 
 
 def render_ordenes_editar(req, orden, vehiculos, empleados):

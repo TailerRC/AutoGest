@@ -461,12 +461,7 @@ def render_catalogo_list(req, catalogo, usuario, codigo="", marca="", modelo="",
         Div(
             Div(
                 H2(I(cls="fa-solid fa-book"), " Catálogo Técnico"),
-                Span("MongoDB", cls="db-tag mongo"),
                 cls="card-header"
-            ),
-            Div(
-                P("Directorio de especificaciones y fichas técnicas vehiculares en base de datos NoSQL.", cls="text-muted text-sm"),
-                style="margin-bottom:1.5rem;"
             ),
             cls="card mb-2"
         ),

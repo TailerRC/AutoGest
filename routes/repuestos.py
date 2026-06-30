@@ -637,7 +637,6 @@ def render_repuestos_list(req, usuario, repuestos, todos_repuestos, q="", filtro
         Div(
             Div(
                 H2(I(cls="fa-solid fa-gears"), " Inventario de Repuestos"),
-                Span("Oracle", cls="db-tag oracle"),
                 cls="card-header"
             ),
             Div(

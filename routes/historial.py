@@ -323,7 +323,6 @@ def render_historial_list(req, usuario, historiales, q="", estado="todos", orden
         Div(
             Div(
                 H2(I(cls="fa-solid fa-clock-rotate-left"), " Historial de Mantenimiento"),
-                Span("MongoDB", cls="db-tag mongo"),
                 cls="card-header"
             ),
             Div(
