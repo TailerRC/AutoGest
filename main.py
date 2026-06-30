@@ -118,7 +118,7 @@ def get(req):
         return RedirectResponse("/dashboard", status_code=303)
 
     error = req.query_params.get("error", "")
-    alert = Div(f"❌ {error}", cls="alert alert-error") if error else ""
+    alert = Div(I(cls="fa-solid fa-circle-xmark"), f" {error}", cls="alert alert-error") if error else ""
 
     form = Form(
         Div(
@@ -127,36 +127,33 @@ def get(req):
                 cls="logo-img-wrap"
             ),
             H1("AutoGest"),
-            P("Sistema de Gestión de Taller Mecánico (Autogest)"),
+            P("Sistema Integral de Gestión para Talleres y Concesionarias"),
             cls="login-logo"
         ),
         alert,
         Div(
             Div(
                 Label("Usuario", style="font-size:.78rem;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;"),
-                Input(name="username", placeholder="Ingresa tu usuario", required=True,
-                      autocomplete="username", id="username"),
+                Div(
+                    I(cls="fa-solid fa-user"),
+                    Input(name="username", placeholder="Ingresa tu usuario", required=True,
+                          autocomplete="username", id="username"),
+                    cls="input-icon-wrapper"
+                ),
                 style="display:flex;flex-direction:column;gap:.4rem;margin-bottom:1rem;"
             ),
             Div(
                 Label("Contraseña", style="font-size:.78rem;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;"),
-                Input(name="password", type="password", placeholder="••••••••",
-                      required=True, autocomplete="current-password", id="password"),
+                Div(
+                    I(cls="fa-solid fa-lock"),
+                    Input(name="password", type="password", placeholder="••••••••",
+                          required=True, autocomplete="current-password", id="password"),
+                    cls="input-icon-wrapper"
+                ),
                 style="display:flex;flex-direction:column;gap:.4rem;margin-bottom:1.25rem;"
             ),
         ),
         Button(I(cls="fa-solid fa-right-to-bracket"), " Iniciar Sesión", type="submit", cls="btn btn-primary btn-full btn-lg"),
-        Div(
-            P("Usuarios de demo:"),
-            Div(
-                Span("ana.gomez / admin123", cls="badge badge-purple"),
-                Span("pedro.ramirez / mec2026", cls="badge badge-blue"),
-                Span("luis.torres / fact2026", cls="badge badge-orange"),
-                Span("diego.vargas / view2026", cls="badge badge-gray"),
-                style="display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.5rem;"
-            ),
-            style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border);font-size:.75rem;color:var(--text-muted);"
-        ),
         method="post", action="/login",
         style="display:flex;flex-direction:column;"
     )
