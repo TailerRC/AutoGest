@@ -122,7 +122,7 @@ def render_bitacora_list(req, usuario, bitacoras, q="", page=1, total_pages=1, t
         ),
         cls="page-body"
     )
-    return layout(req, "Bitácora", "Bitácora de Diagnóstico", "Base de datos MongoDB", contenido)
+    return layout(req, "Bitácora", "Bitácora de Diagnóstico", "Códigos OBD y evidencias", contenido)
 
 
 def render_bitacora_detalle(req, bitacora, vehiculo):
