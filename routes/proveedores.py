@@ -208,7 +208,6 @@ def render_proveedores_list(req, usuario, proveedores, q="", linea="todos", page
         Div(
             Div(
                 H2(I(cls="fa-solid fa-truck"), " Proveedores"),
-                Span("MongoDB", cls="db-tag mongo"),
                 cls="card-header"
             ),
             Div(
@@ -227,7 +226,7 @@ def render_proveedores_list(req, usuario, proveedores, q="", linea="todos", page
         ),
         cls="page-body"
     )
-    return layout(req, "Proveedores", "Gestión de Proveedores", "Base de datos MongoDB", contenido)
+    return layout(req, "Proveedores", "Gestión de Proveedores", "Registrar nuevos proveedores", contenido)
 
 
 def render_proveedores_nuevo(req):
