@@ -344,7 +344,7 @@ def render_historial_list(req, usuario, historiales, q="", estado="todos", orden
         js_script,
         cls="page-body"
     )
-    return layout(req, "Historial", "Historial de Mantenimiento", "Base de datos MongoDB", contenido)
+    return layout(req, "Historial", "Historial de Mantenimiento", "Pasado mecánico del vehículo", contenido)
 
 
 def render_historial_nuevo(req, vehiculos):

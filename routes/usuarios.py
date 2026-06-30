@@ -132,7 +132,7 @@ def render_usuarios_list(req, usuario, usuarios):
         ),
         cls="page-body"
     )
-    return layout(req, "Usuarios", "Gestión de Usuarios", "Solo accesible para Admin — Oracle", contenido)
+    return layout(req, "Usuarios", "Gestión de Usuarios", "Accesos, roles y contraseñas - Admin", contenido)
 
 
 def render_usuarios_nuevo(req, empleados):

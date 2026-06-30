@@ -238,7 +238,7 @@ def render_reportes_list(req, ordenes, logs, resumen, mecanicos, usuarios=None):
         ),
         cls="page-body"
     )
-    return layout(req, "Reportes", "Reportes del Sistema", "Datos combinados Oracle + MongoDB", contenido)
+    return layout(req, "Reportes", "Reportes del Sistema", "Estadísticas y finanzas", contenido)
 
 def render_reportes_detalle(req, datos):
     """Renderiza el reporte detallado de una orden integrando Oracle y Mongo."""

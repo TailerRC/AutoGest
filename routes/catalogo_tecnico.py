@@ -484,4 +484,4 @@ def render_catalogo_list(req, catalogo, usuario, codigo="", marca="", modelo="",
         cls="page-body"
     )
 
-    return layout(req, "Catálogo Técnico", "Catálogo de Especificaciones", "Base de datos MongoDB", contenido)
+    return layout(req, "Catálogo Técnico", "Catálogo de Especificaciones", "Fichas técnicas de fábrica", contenido)

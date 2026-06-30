@@ -284,7 +284,7 @@ def render_cotizaciones_list(req, usuario, cotizaciones, q="", estado="todos", o
         req,
         "Cotizaciones",
         "Gestión de Cotizaciones",
-        "Base de datos MongoDB",
+        "Presupuestos y precios comerciales",
         contenido
     )
 

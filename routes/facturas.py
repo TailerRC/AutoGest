@@ -320,7 +320,7 @@ def render_facturas_list(req, usuario, facturas):
         ),
         cls="page-body"
     )
-    return layout(req, "Facturas", "Gestión de Facturas", "Base de datos Oracle", contenido)
+    return layout(req, "Facturas", "Gestión de Facturas", "Gestión de cobros y pagos", contenido)
 
 
 def render_facturas_nueva(req, ordenes):

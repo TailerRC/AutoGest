@@ -259,7 +259,7 @@ def render_vehiculos_list(req, usuario, vehiculos, clientes, total, page, per_pa
         ),
         cls="page-body"
     )
-    return layout(req, "Vehículos", "Gestión de Vehículos", "Base de datos Oracle", contenido)
+    return layout(req, "Vehículos", "Gestión de Vehículos", "Añadir, Eliminar y Agregar Vehículos", contenido)
 
 def render_vehiculos_nuevo(req, clientes):
     """Renderiza el formulario de nuevo vehículo."""
