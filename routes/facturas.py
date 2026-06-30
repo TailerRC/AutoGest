@@ -525,7 +525,7 @@ def render_facturas_nueva(req, ordenes):
         ),
         cls="page-body"
     )
-    return layout(req, "Nueva Factura", "Generar Nueva Factura", "Base de datos Oracle", contenido)
+    return layout(req, "Nueva Factura", "Generar Nueva Factura", "Registrar la factura", contenido)
 
 
 def render_facturas_detalle(req, factura):
